@@ -97,7 +97,7 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 Per produzione:
 
 - TURN/coturn;
-- token di sessione monouso;
+- token di sessione monouso o riusabile, selezionabile dal controller;
 - WebSocket autenticato;
 - upload binario della foto;
 - storage S3/Supabase;

@@ -33,7 +33,7 @@
       <section class="card"><h2>Elenco foto</h2><div id="gallery" class="gallery"><p class="small">Nessuna foto.</p></div></section>
     </div>
     <aside class="sidebar sidebar-right" aria-label="Sessione e QR code">
-      <section class="sidebar-section session-section"><h2>Sessione</h2><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><button id="newSession" class="secondary" type="button">Nuova sessione</button><button id="copyLink" class="secondary" type="button">Copia link camera</button><p id="cameraUrl" class="small secret-url"></p></section>
+      <section class="sidebar-section session-section"><h2>Sessione</h2><label>Token<select id="tokenMode"><option value="one-time">Monouso</option><option value="reusable">Riusabile</option></select></label><p id="tokenModeInfo" class="small">Il QR può essere usato una sola volta.</p><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><button id="newSession" class="secondary" type="button">Nuova sessione</button><button id="copyLink" class="secondary" type="button">Copia link camera</button><p id="cameraUrl" class="small secret-url"></p></section>
       <section class="sidebar-section"><h2>QR code</h2><img id="qr" class="qr" alt="QR di pairing monouso"></section>
     </aside>
   </div>

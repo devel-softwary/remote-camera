@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
+import { consumeCameraToken, sessionTokenMode } from './session-policy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -21,6 +22,11 @@ const sessions = new Map();
 
 function token(bytes = 24) { return crypto.randomBytes(bytes).toString('base64url'); }
 function roomCode() { return crypto.randomBytes(5).toString('hex').slice(0, 8).toUpperCase(); }
+function tokensEqual(actual, supplied) {
+  const expected = Buffer.from(actual);
+  const received = Buffer.from(supplied);
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
 function pruneSessions() {
   const now = Date.now();
   for (const [room, s] of sessions) {
@@ -48,7 +54,7 @@ app.get('/api/config', (req, res) => {
   res.json({ baseUrl: base.replace(/\/$/, ''), iceServers, sessionTtlMs: SESSION_TTL_MS });
 });
 
-app.post('/api/session', (_req, res) => {
+app.post('/api/session', (req, res) => {
   pruneSessions();
   let room;
   do { room = roomCode(); } while (sessions.has(room));
@@ -57,6 +63,7 @@ app.post('/api/session', (_req, res) => {
     controllerToken: token(),
     cameraToken: token(),
     cameraTokenConsumed: false,
+    tokenMode: sessionTokenMode(req.body?.reusable),
     expiresAt: Date.now() + SESSION_TTL_MS,
     camera: null,
     controller: null
@@ -66,6 +73,7 @@ app.post('/api/session', (_req, res) => {
     room,
     controllerToken: session.controllerToken,
     cameraToken: session.cameraToken,
+    tokenMode: session.tokenMode,
     expiresAt: new Date(session.expiresAt).toISOString()
   });
 });
@@ -120,16 +128,16 @@ function authenticateJoin(ws, msg) {
   if (Date.now() >= session.expiresAt) return { error: 'Sessione scaduta.' };
 
   if (role === 'controller') {
-    if (!crypto.timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(session.controllerToken))) {
+    if (!tokensEqual(session.controllerToken, suppliedToken)) {
       return { error: 'Token controller non valido.' };
     }
   } else {
-    if (session.cameraTokenConsumed) return { error: 'Token camera già utilizzato. Crea una nuova sessione.' };
-    if (!crypto.timingSafeEqual(Buffer.from(suppliedToken), Buffer.from(session.cameraToken))) {
+    if (session.tokenMode === 'one-time' && session.cameraTokenConsumed) return { error: 'Token camera già utilizzato. Crea una nuova sessione.' };
+    if (!tokensEqual(session.cameraToken, suppliedToken)) {
       return { error: 'Token camera non valido.' };
     }
-    session.cameraTokenConsumed = true;
-    session.cameraToken = token(); // invalida immediatamente il token condiviso nel QR
+    consumeCameraToken(session);
+    if (session.tokenMode === 'one-time') session.cameraToken = token(); // invalida immediatamente il token condiviso nel QR
   }
 
   if (session[role] && session[role] !== ws) {

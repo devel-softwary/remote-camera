@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { MAX_CAD_SIZE, cadValidationError, isCadFile, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from '../public/cad-viewer.js';
+import { consumeCameraToken, sessionTokenMode } from '../session-policy.js';
 
 assert.equal(isCadFile({ name: 'rilievo.DWG' }), true);
 assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
@@ -14,3 +15,10 @@ assert.deepEqual(shapes, [{ type: 'line', x1: 0, y1: 0, x2: 20, y2: 10 }]);
 assert.ok(drawingBounds(shapes).width > 20);
 const photoPoint = createPhotoPoint([], 12, 8);
 assert.deepEqual({ label: photoPoint.label, x: photoPoint.x, y: photoPoint.y }, { label: 'Punto foto 1', x: 12, y: 8 });
+assert.equal(sessionTokenMode(true), 'reusable');
+const reusableSession = { tokenMode: 'reusable', cameraTokenConsumed: false };
+assert.equal(consumeCameraToken(reusableSession), true);
+assert.equal(consumeCameraToken(reusableSession), true);
+const oneTimeSession = { tokenMode: 'one-time', cameraTokenConsumed: false };
+assert.equal(consumeCameraToken(oneTimeSession), true);
+assert.equal(consumeCameraToken(oneTimeSession), false);

@@ -30,6 +30,8 @@ const uploadCadBtn = document.querySelector('#uploadCad');
 const deleteCadBtn = document.querySelector('#deleteCad');
 const cadFileName = document.querySelector('#cadFileName');
 const dwgState = document.querySelector('#dwgState');
+const tokenMode = document.querySelector('#tokenMode');
+const tokenModeInfo = document.querySelector('#tokenModeInfo');
 const cadCanvas = document.querySelector('#cadCanvas');
 const addPhotoPointBtn = document.querySelector('#addPhotoPoint');
 const zoomInCadBtn = document.querySelector('#zoomInCad');
@@ -159,7 +161,7 @@ function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.s
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
 
 async function createSession(photoPoint = null) {
-  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reusable: tokenMode.value === 'reusable' }) });
   if (!r.ok) throw new Error('Impossibile creare la sessione');
   session = await r.json();
   activePhotoPoint = photoPoint;
@@ -173,6 +175,8 @@ function updateSessionUi() {
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
   expiryEl.textContent = `${activePhotoPoint ? `${activePhotoPoint.label} • ` : ''}QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
+  tokenMode.value = session.tokenMode;
+  tokenModeInfo.textContent = session.tokenMode === 'reusable' ? 'Il QR può riagganciare il telefono a questa sessione fino alla scadenza.' : 'Il QR può essere usato una sola volta.';
 }
 
 function resetControls() {
@@ -345,6 +349,10 @@ cameraSelect.addEventListener('change', () => {
 newSessionBtn.addEventListener('click', async () => {
   newSessionBtn.disabled = true;
   try { await createSession(); } finally { newSessionBtn.disabled = false; }
+});
+
+tokenMode.addEventListener('change', () => {
+  tokenModeInfo.textContent = tokenMode.value === 'reusable' ? 'La prossima sessione permetterà il riaggancio del telefono fino alla scadenza.' : 'La prossima sessione avrà un QR monouso.';
 });
 
 copyLinkBtn.addEventListener('click', async () => {

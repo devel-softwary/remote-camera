@@ -7,3 +7,5 @@ Il controller usa un workspace responsivo a tre colonne:
 - destra: sessione e QR code.
 
 La selezione progetto e il riferimento al CAD rimangono locali al browser. Il file CAD viene validato (DWG/DXF, massimo 50 MB) prima di essere mostrato nell'area di lavoro. I DXF sono renderizzati localmente con zoom e punti foto; ogni punto può generare un QR per una sessione dedicata. Il rendering di un DWG binario richiede un convertitore DWG→DXF lato server.
+
+La sessione può usare un token monouso (predefinito) o riusabile. Un token riusabile consente allo stesso QR di riagganciare la camera fino alla scadenza della sessione; trattandosi di un segreto di accesso, va condiviso solo con il dispositivo autorizzato.
