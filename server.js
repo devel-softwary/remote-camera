@@ -68,7 +68,6 @@ app.post('/api/session', (req, res) => {
     cameraTokenConsumed: false,
     tokenMode: sessionTokenMode(req.body?.reusable),
     project: safeFolderName(req.body?.project),
-    area: safeFolderName(req.body?.area),
     expiresAt: Date.now() + SESSION_TTL_MS,
     camera: null,
     controller: null
@@ -76,6 +75,7 @@ app.post('/api/session', (req, res) => {
   sessions.set(room, session);
   res.status(201).json({
     room,
+    project: session.project,
     controllerToken: session.controllerToken,
     cameraToken: session.cameraToken,
     tokenMode: session.tokenMode,
@@ -90,7 +90,7 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   const area = safeFolderName(req.get('x-area'));
   const session = sessions.get(room);
   if (!session || Date.now() >= session.expiresAt || !tokensEqual(session.controllerToken, suppliedToken)) return res.status(401).json({ message: 'Sessione non autorizzata.' });
-  if (!project || !area || session.project !== project || session.area !== area) return res.status(400).json({ message: 'Area di intervento non valida per la sessione.' });
+  if (!project || !area || session.project !== project) return res.status(400).json({ message: 'Area di intervento non valida per la sessione.' });
   if (!req.body?.length) return res.status(400).json({ message: 'Foto non valida.' });
   const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${photoExtension(req.get('content-type'))}`;
   const folder = path.join(uploadsDir, project, area);

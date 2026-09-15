@@ -59,7 +59,6 @@ let cadView = null;
 const cadDrawingByProject = {};
 let addingPhotoPoint = false;
 let selectedPhotoPointId = null;
-let activeArea = null;
 let cadPan = null;
 
 function loadWorkspace() {
@@ -95,12 +94,13 @@ function renderAreas() {
   areaSelect.replaceChildren(new Option('Nessuna area aperta', ''));
   areas.filter(area => area.status === 'open').forEach(area => areaSelect.add(new Option(area.name, area.id)));
   areaSelect.value = areas.some(area => area.id === selected && area.status === 'open') ? selected : (openAreaForProject(areasByProject, project)?.id || '');
-  newAreaBtn.disabled = !project;
+  newAreaBtn.disabled = !session || session.project !== project;
   closeAreaBtn.disabled = !areaSelect.value;
   const area = currentArea();
-  areaState.textContent = area ? `Area aperta: ${area.name}. Le foto saranno archiviate in questa cartella.` : (project ? 'Apri una nuova area per iniziare il rilevamento.' : "Crea un progetto, poi apri un'area di intervento.");
-  startPhotoSessionBtn.disabled = !area;
-  photoPointState.textContent = area ? `Area attiva: ${area.name}. Avvia una sessione per collegare il telefono.` : "Apri un'area di intervento per avviare una sessione di rilevazione.";
+  areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (project && session ? 'Crea o seleziona un’area per iniziare il rilevamento.' : 'Collega prima una sessione al progetto.');
+  captureBtn.disabled = !(area && session?.project === project && dc?.readyState === 'open');
+  startPhotoSessionBtn.disabled = true;
+  photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
   renderGallery();
 }
 
@@ -186,11 +186,10 @@ function changeCadZoom(factor) {
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
 
-async function createSession(area = null) {
-  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reusable: tokenMode.value === 'reusable', project: projectSelect.value, area: area?.name || '' }) });
+async function createSession() {
+  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reusable: tokenMode.value === 'reusable', project: projectSelect.value }) });
   if (!r.ok) throw new Error('Impossibile creare la sessione');
   session = await r.json();
-  activeArea = area;
   updateSessionUi();
   connectWs();
 }
@@ -200,7 +199,7 @@ function updateSessionUi() {
   const cameraUrl = `${config.baseUrl}/camera.html?room=${encodeURIComponent(session.room)}&token=${encodeURIComponent(session.cameraToken)}`;
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
-  expiryEl.textContent = `${activeArea ? `${activeArea.name} • ` : ''}QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
+  expiryEl.textContent = `${session.project} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
   tokenMode.value = session.tokenMode;
   tokenModeInfo.textContent = session.tokenMode === 'reusable' ? 'Il QR può riagganciare il telefono a questa sessione fino alla scadenza.' : 'Il QR può essere usato una sola volta.';
 }
@@ -222,7 +221,7 @@ function createPeer() {
     dc = e.channel;
     dc.binaryType = 'arraybuffer';
     dc.onopen = () => {
-      captureBtn.disabled = !activeArea;
+      captureBtn.disabled = !(currentArea() && session?.project === projectSelect.value);
       connectionInfo.textContent = 'Video + canale dati collegati.';
       sendData({ type: 'get-camera-info' });
     };
@@ -297,7 +296,9 @@ function handleDataChannel(e) {
       connectionInfo.textContent = `Camera attiva: ${msg.label || 'Camera'}`;
     }
     else if (msg.type === 'photo-start') {
-      pendingPhoto = { meta: msg, chunks: [], received: 0 };
+      const area = currentArea();
+      if (!area) { captureState.textContent = 'Seleziona un’area prima di scattare.'; return; }
+      pendingPhoto = { meta: msg, area, chunks: [], received: 0 };
       captureState.textContent = `Ricezione foto ${formatBytes(msg.size)}…`;
     } else if (msg.type === 'photo-end') {
       if (pendingPhoto && pendingPhoto.meta.requestId === msg.requestId) finishPhoto();
@@ -325,19 +326,19 @@ function finishPhoto() {
   pendingPhoto = null;
   const blob = new Blob(p.chunks, { type: p.meta.mime || 'image/jpeg' });
   const url = URL.createObjectURL(blob);
-  savePhoto(blob, p.meta, url).catch(err => {
+  savePhoto(blob, p.meta, p.area, url).catch(err => {
     URL.revokeObjectURL(url);
     captureState.textContent = `Errore archivio: ${err.message}`;
     captureBtn.disabled = false;
   });
 }
 
-async function savePhoto(blob, meta, previewUrl) {
-  if (!activeArea || activeArea.status !== 'open') throw new Error('L’area di intervento non è più aperta.');
-  const response = await fetch('/api/photos', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': projectSelect.value, 'x-area': activeArea.name }, body: blob });
+async function savePhoto(blob, meta, selectedArea, previewUrl) {
+  if (!selectedArea || selectedArea.status !== 'open') throw new Error('L’area di intervento non è più aperta.');
+  const response = await fetch('/api/photos', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name }, body: blob });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Salvataggio non riuscito');
   const saved = await response.json();
-  const area = (areasByProject[projectSelect.value] || []).find(item => item.id === activeArea.id);
+  const area = (areasByProject[session.project] || []).find(item => item.id === selectedArea.id);
   if (!area) throw new Error('Area non disponibile');
   area.photos.push({ url: saved.url, previewUrl, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
@@ -367,7 +368,7 @@ function renderGallery() {
 }
 
 captureBtn.addEventListener('click', () => {
-  if (dc?.readyState !== 'open' || !activeArea) return;
+  if (dc?.readyState !== 'open' || session?.project !== projectSelect.value || !currentArea()) return;
   captureBtn.disabled = true;
   const requestId = `${Date.now()}-${++captureSeq}`;
   captureState.textContent = 'Scatto full-resolution in corso…';
@@ -400,10 +401,9 @@ cameraSelect.addEventListener('change', () => {
 });
 
 newSessionBtn.addEventListener('click', async () => {
-  const area = currentArea();
-  if (!area) { window.alert('Apri prima un’area di intervento.'); return; }
+  if (!projectSelect.value) { window.alert('Crea o seleziona prima un progetto.'); return; }
   newSessionBtn.disabled = true;
-  try { await createSession(area); } finally { newSessionBtn.disabled = false; }
+  try { await createSession(); renderAreas(); } finally { newSessionBtn.disabled = false; }
 });
 
 tokenMode.addEventListener('change', () => {
@@ -416,7 +416,7 @@ copyLinkBtn.addEventListener('click', async () => {
   catch { window.prompt('Copia questo link:', text); }
 });
 
-projectSelect.addEventListener('change', () => { activeArea = null; updateProjectUi(); });
+projectSelect.addEventListener('change', updateProjectUi);
 
 areaSelect.addEventListener('change', () => { renderAreas(); });
 newAreaBtn.addEventListener('click', () => {
@@ -430,7 +430,6 @@ closeAreaBtn.addEventListener('click', () => {
   const area = currentArea();
   if (!area || !window.confirm(`Chiudere l’area “${area.name}”? Le foto resteranno nella sua cartella.`)) return;
   area.status = 'closed';
-  if (activeArea?.id === area.id) { activeArea = null; captureBtn.disabled = true; }
   saveWorkspace(); renderAreas();
 });
 
@@ -498,10 +497,7 @@ zoomInCadBtn.addEventListener('click', () => changeCadZoom(.75));
 zoomOutCadBtn.addEventListener('click', () => changeCadZoom(1.25));
 resetCadViewBtn.addEventListener('click', () => { cadView = cadBounds && { ...cadBounds }; if (cadDrawingByProject[projectSelect.value]) cadDrawingByProject[projectSelect.value].view = cadView; renderCad(); });
 startPhotoSessionBtn.addEventListener('click', async () => {
-  const area = currentArea();
-  if (!area) return;
-  startPhotoSessionBtn.disabled = true;
-  try { await createSession(area); } finally { startPhotoSessionBtn.disabled = false; }
+  // La sessione viene avviata dalla colonna di destra prima della creazione delle aree.
 });
 
 loadWorkspace();

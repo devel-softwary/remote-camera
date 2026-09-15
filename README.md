@@ -76,10 +76,10 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 ## Flusso
 
 1. Apri `/controller.html` e crea un progetto.
-2. Crea un'area di intervento e assegnale un nome.
-3. Premi **Avvia sessione area** e scansiona il QR dallo smartphone.
+2. Crea una sessione dalla colonna destra e scansiona il QR dallo smartphone.
+3. Crea una o più aree di intervento e selezionane una.
 4. Premi **Avvia camera** e concedi il permesso.
-5. Scatta le foto: vengono archiviate nell'area aperta.
+5. Scatta le foto: vengono archiviate nell'area selezionata. Cambia area per associare gli scatti successivi a un'altra cartella.
 6. Chiudi l'area: le foto restano nella sua cartella; puoi aprirne un'altra.
 
 ## Limiti del POC
