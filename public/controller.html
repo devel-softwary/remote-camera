@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Remote Camera - Controller</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main>
+  <div class="actions"><h1 style="flex:1">Remote Camera Controller</h1><span id="status" class="status"><span class="dot"></span><span class="status-text">Connessione…</span></span></div>
+  <section class="card pairing-grid">
+    <div><div class="small">Sessione</div><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><div class="actions"><button id="newSession" class="secondary">Nuova sessione</button><button id="copyLink" class="secondary">Copia link camera</button></div><p id="cameraUrl" class="small secret-url"></p></div>
+    <div><img id="qr" class="qr" alt="QR di pairing monouso"></div>
+  </section>
+  <section class="card"><video id="remoteVideo" class="controller-video" autoplay playsinline></video><div class="connection-row"><span id="connectionInfo" class="small">In attesa del telefono.</span></div></section>
+  <section class="card"><h2>Controlli remoti</h2>
+    <div class="control-grid">
+      <label>Camera<select id="cameraSelect" disabled><option>In attesa…</option></select></label>
+      <label id="zoomGroup">Zoom <span id="zoomValue" class="value">N/D</span><input id="zoom" type="range" min="1" max="1" step="0.1" value="1" disabled></label>
+      <div class="button-control"><span>Illuminazione</span><button id="torch" class="secondary" disabled>🔦 Torcia OFF</button></div>
+      <div class="button-control"><span>Messa a fuoco</span><button id="focus" class="secondary" disabled>◎ Autofocus</button></div>
+    </div>
+    <p id="capabilities" class="small">In attesa delle capacità della camera.</p>
+    <div class="capture-bar"><button id="capture" class="capture" disabled>📷 Scatta foto full-resolution</button><span id="captureState" class="small">In attesa del telefono.</span></div>
+  </section>
+  <section class="card"><h2>Foto ricevute</h2><div id="gallery" class="gallery"><p class="small">Nessuna foto.</p></div></section>
+</main><script type="module" src="/controller.js"></script></body></html>

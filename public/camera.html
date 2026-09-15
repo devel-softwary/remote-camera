@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Remote Camera - Telefono</title><link rel="stylesheet" href="/styles.css">
+</head>
+<body><main>
+  <div class="actions"><h1 style="flex:1">Telefono camera</h1><span id="status" class="status"><span class="dot"></span><span class="status-text">Non connesso</span></span></div>
+  <section id="permissionCard" class="card">
+    <h2>Avvia fotocamera</h2><p>Questa sessione usa un token monouso. Dopo il pairing il link QR non può essere riutilizzato.</p>
+    <button id="start">Consenti camera e collega</button>
+    <p id="secureWarning" class="notice small hidden">La camera richiede HTTPS (eccetto localhost).</p>
+  </section>
+  <section class="card"><video id="localVideo" autoplay playsinline muted></video>
+    <label for="localCameraSelect">Fotocamera da trasmettere
+      <select id="localCameraSelect" disabled><option>Avvia prima la camera</option></select>
+    </label>
+    <p id="cameraHint" class="small">Se il video appare in bianco e nero, prova un'altra fotocamera: sui telefoni con sensori speciali potrebbe essere selezionata la camera notturna o a infrarossi. La scelta viene ricordata su questo browser.</p>
+    <p id="controlsInfo" class="small">Camera non avviata.</p><p id="info" class="small" aria-live="polite">I controlli saranno gestiti dal dispositivo remoto.</p></section>
+</main><script type="module" src="/camera.js"></script></body></html>

@@ -1,0 +1,21 @@
+services:
+  remote-camera:
+    container_name: remote-camera-poc
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      TURN_URL: ${TURN_URL:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+    ports:
+      - "3000"
+    networks:
+      - internal
+      - ssl-reverse-proxy
+networks:
+  internal:
+  ssl-reverse-proxy:
+    external: true
+
