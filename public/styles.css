@@ -60,6 +60,13 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .video-card { padding-bottom:14px; }
 .dwg-card { min-height:250px; }
 .dwg-placeholder { min-height:170px; display:grid; place-content:center; text-align:center; border:1px dashed #3b4a6d; border-radius:14px; color:#8493b5; background:#0c1221; }
+.cad-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.cad-toolbar button { min-height:38px; padding:0 11px; }
+#cadCanvas { display:block; height:420px; overflow:hidden; padding:0; }
+.cad-svg { width:100%; height:100%; background:#0b1020; cursor:crosshair; }
+.cad-shape { fill:none; stroke:#9eb7ff; stroke-width:1; vector-effect:non-scaling-stroke; }
+.photo-marker { fill:#ffb020; stroke:#fff4d6; stroke-width:1; vector-effect:non-scaling-stroke; cursor:pointer; }
+.photo-marker.selected { fill:#3157e7; stroke-width:2; }
 .dwg-placeholder span { font-size:3rem; line-height:1; }
 .dwg-placeholder p { margin:8px 0 0; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }

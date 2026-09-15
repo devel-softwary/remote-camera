@@ -1,5 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { cadValidationError, nextProjectName } from './controller-model.js';
+import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -29,6 +30,13 @@ const uploadCadBtn = document.querySelector('#uploadCad');
 const deleteCadBtn = document.querySelector('#deleteCad');
 const cadFileName = document.querySelector('#cadFileName');
 const dwgState = document.querySelector('#dwgState');
+const cadCanvas = document.querySelector('#cadCanvas');
+const addPhotoPointBtn = document.querySelector('#addPhotoPoint');
+const zoomInCadBtn = document.querySelector('#zoomInCad');
+const zoomOutCadBtn = document.querySelector('#zoomOutCad');
+const resetCadViewBtn = document.querySelector('#resetCadView');
+const startPhotoSessionBtn = document.querySelector('#startPhotoSession');
+const photoPointState = document.querySelector('#photoPointState');
 
 let config, session, ws, pc, dc;
 let captureSeq = 0;
@@ -37,19 +45,30 @@ let torchOn = false;
 let cameraInfo = null;
 let projects = [];
 let cadByProject = {};
+let photoPointsByProject = {};
+let cadShapes = [];
+let cadBounds = null;
+let cadView = null;
+const cadDrawingByProject = {};
+let addingPhotoPoint = false;
+let selectedPhotoPointId = null;
+let activePhotoPoint = null;
+let cadPan = null;
 
 function loadWorkspace() {
   try {
     projects = JSON.parse(localStorage.getItem('remote-camera-projects') || '[]');
     cadByProject = JSON.parse(localStorage.getItem('remote-camera-cad') || '{}');
-    if (!Array.isArray(projects) || typeof cadByProject !== 'object' || !cadByProject) throw new Error('Invalid workspace');
-  } catch { projects = []; cadByProject = {}; }
+    photoPointsByProject = JSON.parse(localStorage.getItem('remote-camera-photo-points') || '{}');
+    if (!Array.isArray(projects) || typeof cadByProject !== 'object' || !cadByProject || typeof photoPointsByProject !== 'object' || !photoPointsByProject) throw new Error('Invalid workspace');
+  } catch { projects = []; cadByProject = {}; photoPointsByProject = {}; }
   renderProjects();
 }
 
 function saveWorkspace() {
   localStorage.setItem('remote-camera-projects', JSON.stringify(projects));
   localStorage.setItem('remote-camera-cad', JSON.stringify(cadByProject));
+  localStorage.setItem('remote-camera-photo-points', JSON.stringify(photoPointsByProject));
 }
 
 function renderProjects() {
@@ -63,21 +82,87 @@ function renderProjects() {
 function updateProjectUi() {
   const project = projectSelect.value;
   const cad = cadByProject[project];
+  const drawing = cadDrawingByProject[project];
+  cadShapes = drawing?.shapes || [];
+  cadBounds = drawing?.bounds || null;
+  cadView = drawing?.view || (cadBounds && { ...cadBounds });
   renameProjectBtn.disabled = !project;
   deleteProjectBtn.disabled = !project;
   uploadCadBtn.disabled = !project;
   deleteCadBtn.disabled = !cad;
+  addPhotoPointBtn.disabled = !cadShapes.length;
+  [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !cadShapes.length);
   cadFileName.textContent = cad ? `${cad.name} (${formatBytes(cad.size)})` : 'Nessun file CAD caricato.';
-  dwgState.textContent = cad ? `File selezionato: ${cad.name}` : 'Carica un file DWG o DXF per iniziare.';
+  dwgState.textContent = cad ? (/\.dwg$/i.test(cad.name) ? 'DWG caricato: serve un convertitore DWG→DXF lato server per la visualizzazione.' : `File selezionato: ${cad.name}`) : 'Carica un file DWG o DXF per iniziare.';
+  renderCad();
+}
+
+function projectPoints() { return photoPointsByProject[projectSelect.value] || []; }
+
+function renderCad() {
+  if (!cadShapes.length || !cadBounds) {
+    cadCanvas.innerHTML = '<span>▧</span><p>Area disegno CAD</p>';
+    return;
+  }
+  const box = cadView || cadBounds;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'cad-svg'); svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.width} ${box.height}`);
+  for (const shape of cadShapes) {
+    const node = document.createElementNS(svg.namespaceURI, shape.type === 'circle' ? 'circle' : shape.type === 'polyline' ? 'polyline' : shape.type === 'point' ? 'circle' : 'line');
+    if (shape.type === 'line') { node.setAttribute('x1', shape.x1); node.setAttribute('y1', -shape.y1); node.setAttribute('x2', shape.x2); node.setAttribute('y2', -shape.y2); }
+    else if (shape.type === 'circle') { node.setAttribute('cx', shape.x); node.setAttribute('cy', -shape.y); node.setAttribute('r', shape.r); }
+    else if (shape.type === 'polyline') node.setAttribute('points', shape.points.map(([x, y]) => `${x},${-y}`).join(' '));
+    else { node.setAttribute('cx', shape.x); node.setAttribute('cy', -shape.y); node.setAttribute('r', Math.max(box.width, box.height) * .004); }
+    node.setAttribute('class', 'cad-shape');
+    svg.append(node);
+  }
+  for (const point of projectPoints()) {
+    const marker = document.createElementNS(svg.namespaceURI, 'circle'); marker.setAttribute('cx', point.x); marker.setAttribute('cy', -point.y); marker.setAttribute('r', Math.max(box.width, box.height) * .012); marker.setAttribute('class', `photo-marker${point.id === selectedPhotoPointId ? ' selected' : ''}`); marker.dataset.pointId = point.id; svg.append(marker);
+  }
+  svg.addEventListener('click', handleCadClick);
+  svg.addEventListener('pointerdown', event => { if (!event.target.closest('.photo-marker')) { cadPan = { x: event.clientX, y: event.clientY }; svg.setPointerCapture(event.pointerId); } });
+  svg.addEventListener('pointermove', handleCadPan);
+  svg.addEventListener('pointerup', () => { cadPan = null; renderCad(); });
+  cadCanvas.replaceChildren(svg);
+  photoPointState.textContent = selectedPhotoPointId ? `Punto selezionato: ${projectPoints().find(point => point.id === selectedPhotoPointId)?.label}.` : 'Seleziona un punto foto per creare una sessione dedicata.';
+  startPhotoSessionBtn.disabled = !selectedPhotoPointId;
+}
+
+function handleCadPan(event) {
+  if (!cadPan || !cadView) return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  cadView = { ...cadView, x: cadView.x + (cadPan.x - event.clientX) * cadView.width / rect.width, y: cadView.y + (cadPan.y - event.clientY) * cadView.height / rect.height };
+  cadPan = { x: event.clientX, y: event.clientY };
+  cadDrawingByProject[projectSelect.value].view = cadView;
+  event.currentTarget.setAttribute('viewBox', `${cadView.x} ${cadView.y} ${cadView.width} ${cadView.height}`);
+}
+
+function handleCadClick(event) {
+  const marker = event.target.closest('.photo-marker');
+  if (marker) { selectedPhotoPointId = marker.dataset.pointId; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); renderCad(); return; }
+  if (!addingPhotoPoint) return;
+  const svg = event.currentTarget; const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+  const xy = point.matrixTransform(svg.getScreenCTM().inverse());
+  const project = projectSelect.value;
+  const photoPoint = createPhotoPoint(projectPoints(), xy.x, -xy.y);
+  (photoPointsByProject[project] ||= []).push(photoPoint); selectedPhotoPointId = photoPoint.id; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); saveWorkspace(); renderCad();
+}
+
+function changeCadZoom(factor) {
+  if (!cadView) return;
+  const width = cadView.width * factor; const height = cadView.height * factor;
+  cadView = { x: cadView.x + (cadView.width - width) / 2, y: cadView.y + (cadView.height - height) / 2, width, height };
+  cadDrawingByProject[projectSelect.value].view = cadView; renderCad();
 }
 
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
 
-async function createSession() {
+async function createSession(photoPoint = null) {
   const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   if (!r.ok) throw new Error('Impossibile creare la sessione');
   session = await r.json();
+  activePhotoPoint = photoPoint;
   updateSessionUi();
   connectWs();
 }
@@ -87,7 +172,7 @@ function updateSessionUi() {
   const cameraUrl = `${config.baseUrl}/camera.html?room=${encodeURIComponent(session.room)}&token=${encodeURIComponent(session.cameraToken)}`;
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
-  expiryEl.textContent = `QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
+  expiryEl.textContent = `${activePhotoPoint ? `${activePhotoPoint.label} • ` : ''}QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
 }
 
 function resetControls() {
@@ -297,6 +382,7 @@ deleteProjectBtn.addEventListener('click', () => {
   if (!current || !window.confirm(`Eliminare il progetto “${current}”?`)) return;
   projects = projects.filter(project => project !== current);
   delete cadByProject[current];
+  delete photoPointsByProject[current];
   saveWorkspace();
   renderProjects();
 });
@@ -307,6 +393,11 @@ cadFile.addEventListener('change', () => {
   const error = cadValidationError(file);
   if (error) { if (file) window.alert(error); cadFile.value = ''; return; }
   cadByProject[projectSelect.value] = { name: file.name, size: file.size };
+  if (/\.dxf$/i.test(file.name)) {
+    const reader = new FileReader();
+    reader.onload = () => { cadShapes = parseDxf(String(reader.result)); const bounds = drawingBounds(cadShapes); cadBounds = { ...bounds, y: -bounds.y - bounds.height }; cadView = { ...cadBounds }; cadDrawingByProject[projectSelect.value] = { shapes: cadShapes, bounds: cadBounds, view: cadView }; selectedPhotoPointId = null; updateProjectUi(); };
+    reader.readAsText(file);
+  } else { cadShapes = []; cadBounds = null; cadView = null; delete cadDrawingByProject[projectSelect.value]; dwgState.textContent = 'DWG caricato: serve un convertitore DWG→DXF lato server per la visualizzazione.'; }
   saveWorkspace();
   updateProjectUi();
   cadFile.value = '';
@@ -316,8 +407,20 @@ deleteCadBtn.addEventListener('click', () => {
   const project = projectSelect.value;
   if (!project || !window.confirm('Rimuovere il file CAD dal progetto?')) return;
   delete cadByProject[project];
+  cadShapes = []; cadBounds = null; cadView = null; delete cadDrawingByProject[project]; selectedPhotoPointId = null;
   saveWorkspace();
   updateProjectUi();
+});
+
+addPhotoPointBtn.addEventListener('click', () => { addingPhotoPoint = !addingPhotoPoint; addPhotoPointBtn.classList.toggle('active', addingPhotoPoint); photoPointState.textContent = addingPhotoPoint ? 'Clicca sul disegno per posizionare il punto foto.' : 'Seleziona un punto foto per creare una sessione dedicata.'; });
+zoomInCadBtn.addEventListener('click', () => changeCadZoom(.75));
+zoomOutCadBtn.addEventListener('click', () => changeCadZoom(1.25));
+resetCadViewBtn.addEventListener('click', () => { cadView = cadBounds && { ...cadBounds }; if (cadDrawingByProject[projectSelect.value]) cadDrawingByProject[projectSelect.value].view = cadView; renderCad(); });
+startPhotoSessionBtn.addEventListener('click', async () => {
+  const point = projectPoints().find(item => item.id === selectedPhotoPointId);
+  if (!point) return;
+  startPhotoSessionBtn.disabled = true;
+  try { await createSession(point); } finally { startPhotoSessionBtn.disabled = false; }
 });
 
 loadWorkspace();
