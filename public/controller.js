@@ -1,4 +1,5 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
+import { cadValidationError, nextProjectName } from './controller-model.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -19,12 +20,56 @@ const torchBtn = document.querySelector('#torch');
 const focusBtn = document.querySelector('#focus');
 const capabilitiesEl = document.querySelector('#capabilities');
 const expiryEl = document.querySelector('#expiry');
+const projectSelect = document.querySelector('#projectSelect');
+const newProjectBtn = document.querySelector('#newProject');
+const renameProjectBtn = document.querySelector('#renameProject');
+const deleteProjectBtn = document.querySelector('#deleteProject');
+const cadFile = document.querySelector('#cadFile');
+const uploadCadBtn = document.querySelector('#uploadCad');
+const deleteCadBtn = document.querySelector('#deleteCad');
+const cadFileName = document.querySelector('#cadFileName');
+const dwgState = document.querySelector('#dwgState');
 
 let config, session, ws, pc, dc;
 let captureSeq = 0;
 let pendingPhoto = null;
 let torchOn = false;
 let cameraInfo = null;
+let projects = [];
+let cadByProject = {};
+
+function loadWorkspace() {
+  try {
+    projects = JSON.parse(localStorage.getItem('remote-camera-projects') || '[]');
+    cadByProject = JSON.parse(localStorage.getItem('remote-camera-cad') || '{}');
+    if (!Array.isArray(projects) || typeof cadByProject !== 'object' || !cadByProject) throw new Error('Invalid workspace');
+  } catch { projects = []; cadByProject = {}; }
+  renderProjects();
+}
+
+function saveWorkspace() {
+  localStorage.setItem('remote-camera-projects', JSON.stringify(projects));
+  localStorage.setItem('remote-camera-cad', JSON.stringify(cadByProject));
+}
+
+function renderProjects() {
+  const selected = projectSelect.value;
+  projectSelect.replaceChildren(new Option('Seleziona progetto…', ''));
+  projects.forEach(name => projectSelect.add(new Option(name, name)));
+  projectSelect.value = projects.includes(selected) ? selected : '';
+  updateProjectUi();
+}
+
+function updateProjectUi() {
+  const project = projectSelect.value;
+  const cad = cadByProject[project];
+  renameProjectBtn.disabled = !project;
+  deleteProjectBtn.disabled = !project;
+  uploadCadBtn.disabled = !project;
+  deleteCadBtn.disabled = !cad;
+  cadFileName.textContent = cad ? `${cad.name} (${formatBytes(cad.size)})` : 'Nessun file CAD caricato.';
+  dwgState.textContent = cad ? `File selezionato: ${cad.name}` : 'Carica un file DWG o DXF per iniziare.';
+}
 
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
@@ -223,5 +268,58 @@ copyLinkBtn.addEventListener('click', async () => {
   catch { window.prompt('Copia questo link:', text); }
 });
 
+projectSelect.addEventListener('change', updateProjectUi);
+
+newProjectBtn.addEventListener('click', () => {
+  const name = nextProjectName(projects, window.prompt('Nome del nuovo progetto:', ''));
+  if (!name) return;
+  projects.push(name);
+  saveWorkspace();
+  renderProjects();
+  projectSelect.value = name;
+  updateProjectUi();
+});
+
+renameProjectBtn.addEventListener('click', () => {
+  const current = projectSelect.value;
+  const name = nextProjectName(projects.filter(project => project !== current), window.prompt('Nuovo nome progetto:', current) || '');
+  if (!name) return;
+  projects = projects.map(project => project === current ? name : project);
+  if (cadByProject[current]) { cadByProject[name] = cadByProject[current]; delete cadByProject[current]; }
+  saveWorkspace();
+  renderProjects();
+  projectSelect.value = name;
+  updateProjectUi();
+});
+
+deleteProjectBtn.addEventListener('click', () => {
+  const current = projectSelect.value;
+  if (!current || !window.confirm(`Eliminare il progetto “${current}”?`)) return;
+  projects = projects.filter(project => project !== current);
+  delete cadByProject[current];
+  saveWorkspace();
+  renderProjects();
+});
+
+uploadCadBtn.addEventListener('click', () => cadFile.click());
+cadFile.addEventListener('change', () => {
+  const file = cadFile.files?.[0];
+  const error = cadValidationError(file);
+  if (error) { if (file) window.alert(error); cadFile.value = ''; return; }
+  cadByProject[projectSelect.value] = { name: file.name, size: file.size };
+  saveWorkspace();
+  updateProjectUi();
+  cadFile.value = '';
+});
+
+deleteCadBtn.addEventListener('click', () => {
+  const project = projectSelect.value;
+  if (!project || !window.confirm('Rimuovere il file CAD dal progetto?')) return;
+  delete cadByProject[project];
+  saveWorkspace();
+  updateProjectUi();
+});
+
+loadWorkspace();
 config = await loadConfig();
 await createSession();
