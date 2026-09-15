@@ -18,6 +18,8 @@
         <button id="newArea" type="button" disabled>Nuova area</button><button id="closeArea" class="secondary" type="button" disabled>Chiudi area</button>
         <p id="areaState" class="small">Crea un progetto, poi apri un'area di intervento.</p>
       </section>
+      <section class="sidebar-section session-section"><h2>Sessione</h2><label>Token<select id="tokenMode"><option value="one-time">Monouso</option><option value="reusable">Riusabile</option></select></label><p id="tokenModeInfo" class="small">Il QR può essere usato una sola volta.</p><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><button id="newSession" class="secondary" type="button">Nuova sessione</button><button id="copyLink" class="secondary" type="button">Copia link camera</button><p id="cameraUrl" class="small secret-url"></p></section>
+      <section class="sidebar-section"><h2>QR code</h2><img id="qr" class="qr" alt="QR di pairing monouso"></section>
     </aside>
     <div class="workspace-main">
       <section class="card video-card"><div class="section-heading"><h2>Remote video</h2><span id="connectionInfo" class="small">In attesa del telefono.</span></div><video id="remoteVideo" class="controller-video" autoplay playsinline></video></section>
@@ -37,9 +39,5 @@
       </section>
       <section class="card"><h2>Elenco foto</h2><div id="gallery" class="gallery"><p class="small">Nessuna foto.</p></div></section>
     </div>
-    <aside class="sidebar sidebar-right" aria-label="Sessione e QR code">
-      <section class="sidebar-section session-section"><h2>Sessione</h2><label>Token<select id="tokenMode"><option value="one-time">Monouso</option><option value="reusable">Riusabile</option></select></label><p id="tokenModeInfo" class="small">Il QR può essere usato una sola volta.</p><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><button id="newSession" class="secondary" type="button">Nuova sessione</button><button id="copyLink" class="secondary" type="button">Copia link camera</button><p id="cameraUrl" class="small secret-url"></p></section>
-      <section class="sidebar-section"><h2>QR code</h2><img id="qr" class="qr" alt="QR di pairing monouso"></section>
-    </aside>
   </div>
 </main><script type="module" src="/controller.js"></script></body></html>
