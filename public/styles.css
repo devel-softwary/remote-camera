@@ -61,6 +61,7 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .section-heading .small { margin:0; text-align:right; }
 .video-card { padding-bottom:14px; }
 .dwg-card { min-height:250px; }
+.cad-section, .dwg-card { display:none; }
 .dwg-placeholder { min-height:170px; display:grid; place-content:center; text-align:center; border:1px dashed #3b4a6d; border-radius:14px; color:#8493b5; background:#0c1221; }
 .cad-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
 .cad-toolbar button { min-height:38px; padding:0 11px; }
