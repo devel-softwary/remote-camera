@@ -20,3 +20,17 @@ export function nextProjectName(existingNames, requestedName) {
 export function photoPointForProject(pointsByProject, project) {
   return Array.isArray(pointsByProject[project]) ? pointsByProject[project] : [];
 }
+
+export function nextAreaName(areas, requestedName) {
+  const name = String(requestedName || '').trim();
+  if (!name) return '';
+  return areas.some(area => area.name.toLocaleLowerCase() === name.toLocaleLowerCase()) ? '' : name;
+}
+
+export function createInterventionArea(areas, name) {
+  return { id: crypto.randomUUID(), name, status: 'open', photos: [] };
+}
+
+export function openAreaForProject(areasByProject, project) {
+  return (areasByProject[project] || []).find(area => area.status === 'open') || null;
+}

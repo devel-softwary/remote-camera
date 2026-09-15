@@ -42,6 +42,8 @@ button.active { outline:2px solid #ffcf70; }
 button.capture { min-height:54px; font-size:1.05rem; }
 .gallery figcaption { color:#b8c0d9; font-size:.8rem; margin-top:5px; }
 .gallery a { display:inline-block; margin-top:3px; }
+.photo-area { grid-column:1 / -1; }
+.photo-area h3 { margin:18px 0 8px; font-size:.95rem; color:#d9e2ff; }
 .disabled-control { opacity:.55; }
 .controller-shell { width:min(1600px, 100%); }
 .controller-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }

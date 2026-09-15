@@ -8,6 +8,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import { consumeCameraToken, sessionTokenMode } from './session-policy.js';
+import { photoExtension, safeFolderName } from './storage-policy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -17,6 +18,8 @@ const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 10 * 60 * 1000);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '1h' }));
+const uploadsDir = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: false, maxAge: '1h' }));
 
 const sessions = new Map();
 
@@ -64,6 +67,8 @@ app.post('/api/session', (req, res) => {
     cameraToken: token(),
     cameraTokenConsumed: false,
     tokenMode: sessionTokenMode(req.body?.reusable),
+    project: safeFolderName(req.body?.project),
+    area: safeFolderName(req.body?.area),
     expiresAt: Date.now() + SESSION_TTL_MS,
     camera: null,
     controller: null
@@ -76,6 +81,22 @@ app.post('/api/session', (req, res) => {
     tokenMode: session.tokenMode,
     expiresAt: new Date(session.expiresAt).toISOString()
   });
+});
+
+app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '20mb' }), (req, res) => {
+  const room = String(req.get('x-room') || '').toUpperCase();
+  const suppliedToken = String(req.get('x-controller-token') || '');
+  const project = safeFolderName(req.get('x-project'));
+  const area = safeFolderName(req.get('x-area'));
+  const session = sessions.get(room);
+  if (!session || Date.now() >= session.expiresAt || !tokensEqual(session.controllerToken, suppliedToken)) return res.status(401).json({ message: 'Sessione non autorizzata.' });
+  if (!project || !area || session.project !== project || session.area !== area) return res.status(400).json({ message: 'Area di intervento non valida per la sessione.' });
+  if (!req.body?.length) return res.status(400).json({ message: 'Foto non valida.' });
+  const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${photoExtension(req.get('content-type'))}`;
+  const folder = path.join(uploadsDir, project, area);
+  fs.mkdirSync(folder, { recursive: true, mode: 0o750 });
+  fs.writeFileSync(path.join(folder, filename), req.body, { mode: 0o640 });
+  res.status(201).json({ url: `/uploads/${encodeURIComponent(project)}/${encodeURIComponent(area)}/${filename}` });
 });
 
 app.get('/api/qr', async (req, res) => {

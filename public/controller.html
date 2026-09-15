@@ -13,6 +13,11 @@
         <button id="uploadCad" class="secondary" type="button">Carica DWG/DXF</button><button id="deleteCad" class="danger" type="button" disabled>Elimina</button>
         <p id="cadFileName" class="small">Nessun file CAD caricato.</p>
       </section>
+      <section class="sidebar-section"><h2>Area di intervento</h2>
+        <select id="areaSelect" aria-label="Area di intervento"><option value="">Nessuna area aperta</option></select>
+        <button id="newArea" type="button" disabled>Nuova area</button><button id="closeArea" class="secondary" type="button" disabled>Chiudi area</button>
+        <p id="areaState" class="small">Crea un progetto, poi apri un'area di intervento.</p>
+      </section>
     </aside>
     <div class="workspace-main">
       <section class="card video-card"><div class="section-heading"><h2>Remote video</h2><span id="connectionInfo" class="small">In attesa del telefono.</span></div><video id="remoteVideo" class="controller-video" autoplay playsinline></video></section>
@@ -27,8 +32,8 @@
         <div class="capture-bar"><button id="capture" class="capture" disabled>📷 Scatta foto full-resolution</button><span id="captureState" class="small">In attesa del telefono.</span></div>
       </section>
       <section class="card dwg-card"><div class="section-heading"><h2>DWG area</h2><span id="dwgState" class="small">Carica un file DWG o DXF per iniziare.</span></div>
-        <div class="cad-toolbar"><button id="addPhotoPoint" class="secondary" type="button" disabled>Aggiungi punto foto</button><button id="zoomInCad" class="secondary" type="button" disabled aria-label="Ingrandisci disegno">＋</button><button id="zoomOutCad" class="secondary" type="button" disabled aria-label="Riduci disegno">−</button><button id="resetCadView" class="secondary" type="button" disabled>Centra</button><button id="startPhotoSession" type="button" disabled>Avvia sessione foto</button></div>
-        <p id="photoPointState" class="small">Seleziona un punto foto per creare una sessione dedicata.</p><div id="cadCanvas" class="dwg-placeholder" aria-live="polite"><span>▧</span><p>Area disegno CAD</p></div>
+        <div class="cad-toolbar"><button id="addPhotoPoint" class="secondary" type="button" disabled>Aggiungi punto foto</button><button id="zoomInCad" class="secondary" type="button" disabled aria-label="Ingrandisci disegno">＋</button><button id="zoomOutCad" class="secondary" type="button" disabled aria-label="Riduci disegno">−</button><button id="resetCadView" class="secondary" type="button" disabled>Centra</button><button id="startPhotoSession" type="button" disabled>Avvia sessione area</button></div>
+        <p id="photoPointState" class="small">Apri un'area di intervento per avviare una sessione di rilevazione.</p><div id="cadCanvas" class="dwg-placeholder" aria-live="polite"><span>▧</span><p>Area disegno CAD</p></div>
       </section>
       <section class="card"><h2>Elenco foto</h2><div id="gallery" class="gallery"><p class="small">Nessuna foto.</p></div></section>
     </div>

@@ -11,7 +11,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - camera anteriore/posteriore
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
-- foto ricevuta nel controller e scaricabile
+- aree di intervento nominate, con foto archiviate in `uploads/<progetto>/<area>`
 - STUN incluso; TURN configurabile via variabili d'ambiente
 
 ## Avvio rapido
@@ -75,13 +75,12 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 
 ## Flusso
 
-1. Apri `/controller.html`.
-2. Il controller crea una stanza e mostra un QR.
-3. Scansiona il QR dallo smartphone.
+1. Apri `/controller.html` e crea un progetto.
+2. Crea un'area di intervento e assegnale un nome.
+3. Premi **Avvia sessione area** e scansiona il QR dallo smartphone.
 4. Premi **Avvia camera** e concedi il permesso.
-5. Il live compare sul controller.
-6. Premi **Scatta foto**.
-7. Lo smartphone acquisisce la foto e la rimanda al controller.
+5. Scatta le foto: vengono archiviate nell'area aperta.
+6. Chiudi l'area: le foto restano nella sua cartella; puoi aprirne un'altra.
 
 ## Limiti del POC
 
