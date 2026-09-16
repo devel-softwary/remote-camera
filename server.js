@@ -8,7 +8,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import { consumeCameraToken, sessionTokenMode } from './session-policy.js';
-import { photoExtension, safeFolderName } from './storage-policy.js';
+import { photoExtension, photoStorageDirectory, safeFolderName } from './storage-policy.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
 
@@ -20,7 +20,7 @@ const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 10 * 60 * 1000);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '32kb' }));
 app.use(express.static(path.join(__dirname, 'public'), publicStaticOptions));
-const uploadsDir = path.join(__dirname, 'uploads');
+const uploadsDir = photoStorageDirectory(process.env.PHOTO_STORAGE_DIR, path.join(__dirname, 'uploads'));
 app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: false, maxAge: '1h' }));
 
 const sessions = new Map();

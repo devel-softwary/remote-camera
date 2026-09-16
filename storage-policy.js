@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 export function safeFolderName(value) {
   const name = String(value || '').trim();
   if (!name || name.length > 80) return '';
@@ -7,4 +9,9 @@ export function safeFolderName(value) {
 
 export function photoExtension(contentType) {
   return contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
+}
+
+export function photoStorageDirectory(value, defaultDirectory) {
+  const configured = String(value || '').trim();
+  return configured ? path.resolve(configured) : defaultDirectory;
 }

@@ -13,6 +13,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
 - aree di intervento nominate, con foto archiviate in `uploads/<progetto>/<area>`
+- salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
 - STUN incluso; TURN configurabile via variabili d'ambiente
 
 ## Avvio rapido
@@ -61,6 +62,8 @@ PUBLIC_BASE_URL=https://camera.example.com
 cp .env.example .env
 docker compose up -d --build
 ```
+
+Le foto vengono scritte automaticamente in `./uploads/<progetto>/<area>` sul computer host. Per l'avvio senza Docker, imposta `PHOTO_STORAGE_DIR` con un percorso assoluto, oppure usa la cartella `uploads` del progetto.
 
 ## Dispositivi su reti diverse
 

@@ -9,13 +9,15 @@ services:
       TURN_URL: ${TURN_URL:-}
       TURN_USERNAME: ${TURN_USERNAME:-}
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+      PHOTO_STORAGE_DIR: /app/uploads
     ports:
       - "3000"
     networks:
       - internal
       - ssl-reverse-proxy
+    volumes:
+      - ./uploads:/app/uploads
 networks:
   internal:
   ssl-reverse-proxy:
     external: true
-
