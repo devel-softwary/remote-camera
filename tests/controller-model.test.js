@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { MAX_CAD_SIZE, cadValidationError, canManageAreas, isCadFile, isProjectSelected, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from '../public/cad-viewer.js';
-import { consumeCameraToken, sessionTokenMode } from '../session-policy.js';
+import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { createInterventionArea, nextAreaName, openAreaForProject } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
@@ -22,13 +22,11 @@ assert.deepEqual(shapes, [{ type: 'line', x1: 0, y1: 0, x2: 20, y2: 10 }]);
 assert.ok(drawingBounds(shapes).width > 20);
 const photoPoint = createPhotoPoint([], 12, 8);
 assert.deepEqual({ label: photoPoint.label, x: photoPoint.x, y: photoPoint.y }, { label: 'Punto foto 1', x: 12, y: 8 });
-assert.equal(sessionTokenMode(true), 'reusable');
-const reusableSession = { tokenMode: 'reusable', cameraTokenConsumed: false };
-assert.equal(consumeCameraToken(reusableSession), true);
-assert.equal(consumeCameraToken(reusableSession), true);
-const oneTimeSession = { tokenMode: 'one-time', cameraTokenConsumed: false };
-assert.equal(consumeCameraToken(oneTimeSession), true);
-assert.equal(consumeCameraToken(oneTimeSession), false);
+const binding = createSessionBinding('Progetto', 'Pilastro sud');
+assert.deepEqual(binding, { project: 'Progetto', area: 'Pilastro sud' });
+assert.equal(matchesSessionBinding(binding, 'Progetto', 'Pilastro sud'), true);
+assert.equal(matchesSessionBinding(binding, 'Progetto', 'Pilastro nord'), false);
+assert.equal(createSessionBinding('Progetto', ''), null);
 assert.equal(nextAreaName([{ name: 'Pilastro nord' }], ' pilastro NORD '), '');
 assert.equal(nextAreaName([], ' Pilastro sud '), 'Pilastro sud');
 const area = createInterventionArea([], 'Pilastro sud');
@@ -39,7 +37,7 @@ assert.equal(safeFolderName('../segreto'), '');
 assert.equal(photoExtension('image/png'), 'png');
 assert.equal(HELP_STEPS.length, 4);
 assert.deepEqual(HELP_STEPS[2].details, [
-  'Il sistema attende che un cellulare si agganci.',
-  'Token monouso: usabile solo una volta.',
-  'Token riusabile: il cellulare potrà riagganciarsi.'
+  'Seleziona prima l’area di intervento.',
+  'Il QR è vincolato alla coppia progetto-area.',
+  'Il cellulare potrà riagganciarsi fino alla scadenza.'
 ]);

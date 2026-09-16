@@ -4,9 +4,9 @@ export const HELP_STEPS = [
   {
     title: 'Avvia una sessione',
     details: [
-      'Il sistema attende che un cellulare si agganci.',
-      'Token monouso: usabile solo una volta.',
-      'Token riusabile: il cellulare potrà riagganciarsi.'
+      'Seleziona prima l’area di intervento.',
+      'Il QR è vincolato alla coppia progetto-area.',
+      'Il cellulare potrà riagganciarsi fino alla scadenza.'
     ]
   },
   { title: 'Scatta le foto per l’area corrente' }

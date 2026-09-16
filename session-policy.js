@@ -1,10 +1,8 @@
-export function sessionTokenMode(value) {
-  return value === true ? 'reusable' : 'one-time';
+export function createSessionBinding(project, area) {
+  if (typeof project !== 'string' || typeof area !== 'string' || !project || !area) return null;
+  return Object.freeze({ project, area });
 }
 
-export function consumeCameraToken(session) {
-  if (session.tokenMode === 'reusable') return true;
-  if (session.cameraTokenConsumed) return false;
-  session.cameraTokenConsumed = true;
-  return true;
+export function matchesSessionBinding(session, project, area) {
+  return Boolean(session && session.project === project && session.area === area);
 }

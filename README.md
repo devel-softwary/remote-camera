@@ -80,11 +80,11 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 ## Flusso
 
 1. Apri `/controller.html` e crea un progetto.
-2. Crea una sessione dalla colonna destra e scansiona il QR dallo smartphone.
-3. Crea una o più aree di intervento e selezionane una.
+2. Crea e seleziona un'area di intervento.
+3. Crea una sessione dalla colonna destra e scansiona il QR dallo smartphone.
 4. Premi **Avvia camera** e concedi il permesso.
-5. Scatta le foto: vengono archiviate nell'area selezionata. Cambia area per associare gli scatti successivi a un'altra cartella.
-6. Chiudi l'area: le foto restano nella sua cartella; puoi aprirne un'altra.
+5. Scatta le foto: vengono archiviate nell'area associata al QR. Lo stesso QR può riconnettere il dispositivo fino alla scadenza.
+6. Per un'altra area, crea una nuova sessione: le foto restano nella rispettiva cartella.
 7. Scansiona il QR del controller mobile dal laptop: mostra il video e consente scatto, zoom, torcia e autofocus senza modificare progetto o area.
 
 ## Limiti del POC
@@ -101,7 +101,7 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 Per produzione:
 
 - TURN/coturn;
-- token di sessione monouso o riusabile, selezionabile dal controller;
+- token di sessione riusabile e vincolato a progetto e area;
 - WebSocket autenticato;
 - upload binario della foto;
 - storage S3/Supabase;

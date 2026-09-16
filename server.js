@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
-import { consumeCameraToken, sessionTokenMode } from './session-policy.js';
+import { createSessionBinding, matchesSessionBinding } from './session-policy.js';
 import { photoExtension, photoStorageDirectory, safeFolderName } from './storage-policy.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
@@ -62,6 +62,8 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/session', (req, res) => {
   pruneSessions();
+  const binding = createSessionBinding(safeFolderName(req.body?.project), safeFolderName(req.body?.area));
+  if (!binding) return res.status(400).json({ message: 'Progetto e area di intervento validi sono obbligatori.' });
   let room;
   do { room = roomCode(); } while (sessions.has(room));
   const session = {
@@ -69,23 +71,22 @@ app.post('/api/session', (req, res) => {
     controllerToken: token(),
     mobileControllerToken: token(),
     cameraToken: token(),
-    cameraTokenConsumed: false,
-    tokenMode: sessionTokenMode(req.body?.reusable),
-    project: safeFolderName(req.body?.project),
+    project: binding.project,
+    area: binding.area,
     expiresAt: Date.now() + SESSION_TTL_MS,
     camera: null,
     [CENTRAL_ROLE]: null,
     [MOBILE_ROLE]: null,
-    activeArea: null
+    activeArea: binding.area
   };
   sessions.set(room, session);
   res.status(201).json({
     room,
     project: session.project,
+    area: session.area,
     controllerToken: session.controllerToken,
     mobileControllerToken: session.mobileControllerToken,
     cameraToken: session.cameraToken,
-    tokenMode: session.tokenMode,
     expiresAt: new Date(session.expiresAt).toISOString()
   });
 });
@@ -97,7 +98,7 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   const area = safeFolderName(req.get('x-area'));
   const session = sessions.get(room);
   if (!session || Date.now() >= session.expiresAt || !tokensEqual(session.controllerToken, suppliedToken)) return res.status(401).json({ message: 'Sessione non autorizzata.' });
-  if (!project || !area || session.project !== project || session.activeArea !== area) return res.status(400).json({ message: 'Area di intervento non valida per la sessione.' });
+  if (!matchesSessionBinding(session, project, area)) return res.status(400).json({ message: 'La foto non appartiene al progetto e all’area della sessione.' });
   if (!req.body?.length) return res.status(400).json({ message: 'Foto non valida.' });
   const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${photoExtension(req.get('content-type'))}`;
   const folder = path.join(uploadsDir, project, area);
@@ -168,12 +169,9 @@ function authenticateJoin(ws, msg) {
       return { error: 'Token controller non valido.' };
     }
   } else {
-    if (session.tokenMode === 'one-time' && session.cameraTokenConsumed) return { error: 'Token camera già utilizzato. Crea una nuova sessione.' };
     if (!tokensEqual(session.cameraToken, suppliedToken)) {
       return { error: 'Token camera non valido.' };
     }
-    consumeCameraToken(session);
-    if (session.tokenMode === 'one-time') session.cameraToken = token(); // invalida immediatamente il token condiviso nel QR
   }
 
   if (session[role] && session[role] !== ws) {
@@ -218,7 +216,8 @@ wss.on('connection', (ws) => {
       relayPeer(ws, { ...msg, from: ws.role });
     } else if (msg.type === 'session-area' && ws.role === CENTRAL_ROLE) {
       const area = safeFolderName(msg.area);
-      session.activeArea = area || null;
+      if (area !== session.area) return safeSend(ws, { type: 'command-error', message: 'La sessione è vincolata a un’altra area.' });
+      session.activeArea = session.area;
       sendSessionStatus(session);
     } else if (msg.type === 'photo-saved' && ws.role === CENTRAL_ROLE) {
       eachController(session, { type: 'photo-saved', area: session.activeArea, photo: msg.photo || null });
