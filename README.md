@@ -85,7 +85,6 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 4. Premi **Avvia camera** e concedi il permesso.
 5. Scatta le foto: vengono archiviate nell'area associata al QR. Lo stesso QR può riconnettere il dispositivo fino alla scadenza.
 6. Per un'altra area, crea una nuova sessione: le foto restano nella rispettiva cartella.
-7. Scansiona il QR del controller mobile dal laptop: mostra il video e consente scatto, zoom, torcia e autofocus senza modificare progetto o area.
 
 ## Limiti del POC
 

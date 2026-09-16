@@ -3,16 +3,13 @@ import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage }
 import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
-import { cameraSessionLink, mobileControllerSessionLink } from './session-links.js';
+import { cameraSessionLink } from './session-links.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
 const qr = document.querySelector('#qr');
 const newSessionBtn = document.querySelector('#newSession');
 const copyLinkBtn = document.querySelector('#copyLink');
-const copyMobileLinkBtn = document.querySelector('#copyMobileLink');
-const mobileUrlEl = document.querySelector('#mobileUrl');
-const mobileQr = document.querySelector('#mobileQr');
 const video = document.querySelector('#remoteVideo');
 const statusEl = document.querySelector('#status');
 const connectionInfo = document.querySelector('#connectionInfo');
@@ -50,7 +47,6 @@ const closeAreaBtn = document.querySelector('#closeArea');
 const areaState = document.querySelector('#areaState');
 const areaSection = document.querySelector('#areaSection');
 const sessionSection = document.querySelector('#sessionSection');
-const mobileControllerSection = document.querySelector('#mobileControllerSection');
 const cameraQrSection = document.querySelector('#cameraQrSection');
 const helpButton = document.querySelector('#helpButton');
 const helpDialog = document.querySelector('#helpDialog');
@@ -156,9 +152,8 @@ function updateProjectUi() {
   addPhotoPointBtn.disabled = !cadShapes.length;
   [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !cadShapes.length);
   areaSection.setAttribute('aria-disabled', String(!projectSelected));
-  [sessionSection, mobileControllerSection, cameraQrSection].forEach(section => section.setAttribute('aria-disabled', String(!projectSelected)));
+  [sessionSection, cameraQrSection].forEach(section => section.setAttribute('aria-disabled', String(!projectSelected)));
   copyLinkBtn.disabled = !projectSelected || !session || session.project !== project;
-  copyMobileLinkBtn.disabled = !projectSelected || !session || session.project !== project;
   cadFileName.textContent = cad ? `${cad.name} (${formatBytes(cad.size)})` : 'Nessun file CAD caricato.';
   dwgState.textContent = cad ? (/\.dwg$/i.test(cad.name) ? 'DWG caricato: serve un convertitore DWG→DXF lato server per la visualizzazione.' : `File selezionato: ${cad.name}`) : 'Carica un file DWG o DXF per iniziare.';
   renderCad();
@@ -239,15 +234,11 @@ async function createSession() {
 function updateSessionUi() {
   roomCode.textContent = session.room;
   const cameraUrl = cameraSessionLink(config.baseUrl, session.room, session.cameraToken);
-  const mobileUrl = mobileControllerSessionLink(config.baseUrl, session.room, session.mobileControllerToken);
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
-  mobileUrlEl.textContent = mobileUrl;
-  mobileQr.src = `/api/qr?text=${encodeURIComponent(mobileUrl)}`;
   expiryEl.textContent = `${session.project} • ${session.area} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}.`;
   tokenModeInfo.textContent = `QR riusabile: riconnette il telefono a “${session.project} • ${session.area}” fino alla scadenza.`;
   copyLinkBtn.disabled = false;
-  copyMobileLinkBtn.disabled = false;
 }
 
 function resetControls() {
@@ -483,13 +474,6 @@ newSessionBtn.addEventListener('click', async () => {
 copyLinkBtn.addEventListener('click', async () => {
   const text = cameraUrlEl.textContent;
   try { await navigator.clipboard.writeText(text); copyLinkBtn.textContent = 'Link copiato'; setTimeout(() => copyLinkBtn.textContent = 'Copia link QR', 1500); }
-  catch { window.prompt('Copia questo link:', text); }
-});
-
-copyMobileLinkBtn.addEventListener('click', async () => {
-  const text = mobileUrlEl.textContent;
-  if (!text) return;
-  try { await navigator.clipboard.writeText(text); copyMobileLinkBtn.textContent = 'Link copiato'; setTimeout(() => copyMobileLinkBtn.textContent = 'Copia link controller', 1500); }
   catch { window.prompt('Copia questo link:', text); }
 });
 

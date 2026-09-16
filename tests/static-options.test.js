@@ -9,6 +9,6 @@ assert.deepEqual(publicStaticOptions.extensions, ['html']);
 assert.equal(photoStorageDirectory('', '/data/photos'), '/data/photos');
 assert.equal(photoStorageDirectory('/mnt/camera', '/data/photos'), '/mnt/camera');
 assert.equal(photoStorageDirectory('relative/photos', '/data/photos'), path.resolve('relative/photos'));
-assert.match(fs.readFileSync(new URL('../public/controller.html', import.meta.url), 'utf8'), /id="mobileControllerSection"[^>]*hidden/);
+assert.doesNotMatch(fs.readFileSync(new URL('../public/controller.html', import.meta.url), 'utf8'), /mobileControllerSection|copyMobileLink/);
 
 console.log('Static asset cache policy regression passed');
