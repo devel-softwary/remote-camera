@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/camera-switch.test.js && node tests/controller-model.test.js && node tests/session-peers.test.js && node tests/webrtc-ice.test.js",
+    "test": "node tests/camera-switch.test.js && node tests/controller-model.test.js && node tests/session-peers.test.js && node tests/webrtc-ice.test.js && node tests/static-options.test.js",
     "start": "node server.js",
     "dev": "node --watch server.js"
   },

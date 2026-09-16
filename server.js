@@ -9,7 +9,8 @@ import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import { consumeCameraToken, sessionTokenMode } from './session-policy.js';
 import { photoExtension, safeFolderName } from './storage-policy.js';
-import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole } from './session-peers.js';
+import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
+import { publicStaticOptions } from './static-options.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -18,7 +19,7 @@ const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 10 * 60 * 1000);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '32kb' }));
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '1h' }));
+app.use(express.static(path.join(__dirname, 'public'), publicStaticOptions));
 const uploadsDir = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: false, maxAge: '1h' }));
 
@@ -210,8 +211,10 @@ wss.on('connection', (ws) => {
     if (!session) return;
     const relayTypes = new Set(['webrtc-offer', 'webrtc-answer', 'ice-candidate']);
     if (relayTypes.has(msg.type)) {
-      if (ws.role === CAMERA_ROLE && ![CENTRAL_ROLE, MOBILE_ROLE].includes(msg.targetRole)) return;
-      if (ws.role !== CAMERA_ROLE) msg.targetRole = ws.role;
+      if (ws.role === CAMERA_ROLE) {
+        msg.targetRole = signalTargetRole(ws.role, msg.targetRole);
+        if (!msg.targetRole) return;
+      } else msg.targetRole = ws.role;
       relayPeer(ws, { ...msg, from: ws.role });
     } else if (msg.type === 'session-area' && ws.role === CENTRAL_ROLE) {
       const area = safeFolderName(msg.area);

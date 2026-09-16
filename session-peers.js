@@ -13,3 +13,9 @@ export function controllerRoles() { return [CENTRAL_ROLE, MOBILE_ROLE]; }
 export function activePeerCount(session) {
   return Number(Boolean(session.camera)) + controllerRoles().filter(role => Boolean(session[role])).length;
 }
+
+export function signalTargetRole(senderRole, targetRole) {
+  if (senderRole !== CAMERA_ROLE) return null;
+  if (!targetRole) return CENTRAL_ROLE; // camera client before mobile-controller support
+  return controllerRoles().includes(targetRole) ? targetRole : null;
+}
