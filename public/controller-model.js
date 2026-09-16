@@ -25,6 +25,10 @@ export function canManageAreas(project) {
   return isProjectSelected(project);
 }
 
+export function canDownloadSelectedProject(project, area) {
+  return isProjectSelected(project) && Boolean(area);
+}
+
 export function photoPointForProject(pointsByProject, project) {
   return Array.isArray(pointsByProject[project]) ? pointsByProject[project] : [];
 }

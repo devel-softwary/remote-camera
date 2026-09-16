@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
+import { cadValidationError, canDownloadSelectedProject, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -153,7 +153,7 @@ function updateProjectUi() {
   cadView = drawing?.view || (cadBounds && { ...cadBounds });
   renameProjectBtn.disabled = !projectSelected;
   deleteProjectBtn.disabled = !projectSelected;
-  downloadProjectBtn.disabled = !(session?.project === project && session?.controllerToken);
+  downloadProjectBtn.disabled = !canDownloadSelectedProject(project, currentSelectedArea());
   uploadCadBtn.disabled = !projectSelected;
   deleteCadBtn.disabled = !cad;
   addPhotoPointBtn.disabled = !cadShapes.length;
@@ -228,8 +228,7 @@ function changeCadZoom(factor) {
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
 
-async function createSession() {
-  const area = currentArea();
+async function createSession(area = currentArea()) {
   if (!area) throw new Error('Seleziona un’area di intervento.');
   const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: projectSelect.value, area: area.name }) });
   if (!r.ok) throw new Error('Impossibile creare la sessione');
@@ -499,12 +498,18 @@ copyLinkBtn.addEventListener('click', async () => {
 });
 
 downloadProjectBtn.addEventListener('click', async () => {
-  if (!session || session.project !== projectSelect.value) return;
+  const project = projectSelect.value;
+  const area = currentSelectedArea();
+  if (!canDownloadSelectedProject(project, area)) return;
   downloadProjectBtn.disabled = true;
   const originalLabel = downloadProjectBtn.textContent;
   downloadProjectBtn.textContent = 'Preparazione…';
   try {
-    const response = await fetch(`/api/projects/${encodeURIComponent(session.project)}/download`, {
+    if (!session || session.project !== project) {
+      await createSession(area);
+      renderAreas();
+    }
+    const response = await fetch(`/api/projects/${encodeURIComponent(project)}/download`, {
       method: 'POST',
       headers: { 'x-room': session.room, 'x-controller-token': session.controllerToken }
     });
@@ -512,7 +517,7 @@ downloadProjectBtn.addEventListener('click', async () => {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${session.project}.zip`;
+    link.download = `${project}.zip`;
     link.click();
     URL.revokeObjectURL(url);
   } catch (error) {
