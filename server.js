@@ -206,6 +206,8 @@ wss.on('connection', (ws) => {
     }
 
     if (!ws.room || !ws.role) return;
+    const session = sessions.get(ws.room);
+    if (!session) return;
     const relayTypes = new Set(['webrtc-offer', 'webrtc-answer', 'ice-candidate']);
     if (relayTypes.has(msg.type)) {
       if (ws.role === CAMERA_ROLE && ![CENTRAL_ROLE, MOBILE_ROLE].includes(msg.targetRole)) return;
