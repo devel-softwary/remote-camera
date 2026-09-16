@@ -39,6 +39,12 @@ export function createInterventionArea(areas, name) {
   return { id: crypto.randomUUID(), name, status: 'open', photos: [] };
 }
 
+export function reopenInterventionArea(area) {
+  if (!area || area.status !== 'closed') return false;
+  area.status = 'open';
+  return true;
+}
+
 export function openAreaForProject(areasByProject, project) {
   return (areasByProject[project] || []).find(area => area.status === 'open') || null;
 }

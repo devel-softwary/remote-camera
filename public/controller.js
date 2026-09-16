@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
+import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -44,6 +44,7 @@ const photoPointState = document.querySelector('#photoPointState');
 const areaSelect = document.querySelector('#areaSelect');
 const newAreaBtn = document.querySelector('#newArea');
 const closeAreaBtn = document.querySelector('#closeArea');
+const reopenAreaBtn = document.querySelector('#reopenArea');
 const areaState = document.querySelector('#areaState');
 const areaSection = document.querySelector('#areaSection');
 const sessionSection = document.querySelector('#sessionSection');
@@ -119,14 +120,16 @@ function renderAreas() {
   const projectSelected = isProjectSelected(project);
   const areas = areasByProject[project] || [];
   const selected = areaSelect.value;
-  areaSelect.replaceChildren(new Option('Nessuna area aperta', ''));
-  areas.filter(area => area.status === 'open').forEach(area => areaSelect.add(new Option(area.name, area.id)));
-  areaSelect.value = areas.some(area => area.id === selected && area.status === 'open') ? selected : (openAreaForProject(areasByProject, project)?.id || '');
+  areaSelect.replaceChildren(new Option('Nessuna area', ''));
+  areas.forEach(area => areaSelect.add(new Option(`${area.name}${area.status === 'closed' ? ' · chiusa' : ''}`, area.id)));
+  areaSelect.value = areas.some(area => area.id === selected) ? selected : (openAreaForProject(areasByProject, project)?.id || areas[0]?.id || '');
   areaSelect.disabled = !projectSelected;
   newAreaBtn.disabled = !canManageAreas(project);
-  closeAreaBtn.disabled = !projectSelected || !areaSelect.value;
+  const selectedArea = currentSelectedArea();
+  closeAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'open';
+  reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
-  areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.');
+  areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Area “${selectedArea.name}” chiusa. Riaprila per aggiungere foto.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.'));
   captureBtn.disabled = !(area && session?.project === project && session.area === area.name && dc?.readyState === 'open');
   newSessionBtn.disabled = !(projectSelected && area);
   startPhotoSessionBtn.disabled = true;
@@ -134,7 +137,8 @@ function renderAreas() {
   renderGallery();
 }
 
-function currentArea() { return (areasByProject[projectSelect.value] || []).find(area => area.id === areaSelect.value && area.status === 'open') || null; }
+function currentSelectedArea() { return (areasByProject[projectSelect.value] || []).find(area => area.id === areaSelect.value) || null; }
+function currentArea() { const area = currentSelectedArea(); return area?.status === 'open' ? area : null; }
 function currentSessionArea() { return session && (areasByProject[session.project] || []).find(area => area.name === session.area && area.status === 'open'); }
 
 function updateProjectUi() {
@@ -491,6 +495,12 @@ closeAreaBtn.addEventListener('click', () => {
   const area = currentArea();
   if (!area || !window.confirm(`Chiudere l’area “${area.name}”? Le foto resteranno nella sua cartella.`)) return;
   area.status = 'closed';
+  saveWorkspace(); renderAreas(); publishActiveArea();
+});
+
+reopenAreaBtn.addEventListener('click', () => {
+  const area = currentSelectedArea();
+  if (!reopenInterventionArea(area)) return;
   saveWorkspace(); renderAreas(); publishActiveArea();
 });
 
