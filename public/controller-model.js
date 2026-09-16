@@ -17,6 +17,10 @@ export function nextProjectName(existingNames, requestedName) {
   return existingNames.some(item => item.toLocaleLowerCase() === name.toLocaleLowerCase()) ? '' : name;
 }
 
+export function isProjectSelected(project) {
+  return typeof project === 'string' && project.trim().length > 0;
+}
+
 export function photoPointForProject(pointsByProject, project) {
   return Array.isArray(pointsByProject[project]) ? pointsByProject[project] : [];
 }

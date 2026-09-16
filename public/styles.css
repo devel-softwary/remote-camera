@@ -67,6 +67,7 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .workspace-main .card { margin:0; }
 .sidebar { display:grid; gap:18px; position:sticky; top:18px; }
 .sidebar-section { display:grid; gap:10px; background:#12192b; border:1px solid #25304d; border-radius:18px; padding:18px; }
+.sidebar-section[aria-disabled="true"] { opacity:.48; }
 .sidebar h2, .workspace-main h2 { margin:0; font-size:1.05rem; text-transform:uppercase; letter-spacing:.06em; color:#d9e2ff; }
 .sidebar-actions { display:grid; gap:8px; grid-template-columns:1fr 1fr; }
 .sidebar-actions .danger { grid-column:span 2; }

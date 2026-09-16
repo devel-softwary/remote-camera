@@ -13,14 +13,14 @@
         <button id="uploadCad" class="secondary" type="button">Carica DWG/DXF</button><button id="deleteCad" class="danger" type="button" disabled>Elimina</button>
         <p id="cadFileName" class="small">Nessun file CAD caricato.</p>
       </section>
-      <section class="sidebar-section"><h2>Area di intervento</h2>
-        <select id="areaSelect" aria-label="Area di intervento"><option value="">Nessuna area aperta</option></select>
+      <section id="areaSection" class="sidebar-section" aria-disabled="true"><h2>Area di intervento</h2>
+        <select id="areaSelect" aria-label="Area di intervento" disabled><option value="">Nessuna area aperta</option></select>
         <button id="newArea" type="button" disabled>Nuova area</button><button id="closeArea" class="secondary" type="button" disabled>Chiudi area</button>
         <p id="areaState" class="small">Crea un progetto, poi apri un'area di intervento.</p>
       </section>
-      <section class="sidebar-section session-section"><h2>Sessione</h2><label>Token<select id="tokenMode"><option value="one-time">Monouso</option><option value="reusable">Riusabile</option></select></label><p id="tokenModeInfo" class="small">Il QR può essere usato una sola volta.</p><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><button id="newSession" class="secondary" type="button">Nuova sessione</button><button id="copyLink" class="secondary" type="button">Copia link camera</button><p id="cameraUrl" class="small secret-url"></p></section>
-      <section class="sidebar-section session-section"><h2>Controller mobile</h2><button id="copyMobileLink" class="secondary" type="button">Copia link controller</button><p id="mobileUrl" class="small secret-url"></p><img id="mobileQr" class="qr" alt="QR controller mobile"></section>
-      <section class="sidebar-section"><h2>QR code</h2><img id="qr" class="qr" alt="QR di pairing monouso"></section>
+      <section id="sessionSection" class="sidebar-section session-section" aria-disabled="true"><h2>Sessione</h2><label>Token<select id="tokenMode" disabled><option value="one-time">Monouso</option><option value="reusable">Riusabile</option></select></label><p id="tokenModeInfo" class="small">Il QR può essere usato una sola volta.</p><div id="roomCode" class="code">--------</div><p id="expiry" class="small"></p><button id="newSession" class="secondary" type="button" disabled>Nuova sessione</button><button id="copyLink" class="secondary" type="button" disabled>Copia link camera</button><p id="cameraUrl" class="small secret-url"></p></section>
+      <section id="mobileControllerSection" class="sidebar-section session-section" aria-disabled="true"><h2>Controller mobile</h2><button id="copyMobileLink" class="secondary" type="button" disabled>Copia link controller</button><p id="mobileUrl" class="small secret-url"></p><img id="mobileQr" class="qr" alt="QR controller mobile"></section>
+      <section id="cameraQrSection" class="sidebar-section" aria-disabled="true"><h2>QR code</h2><img id="qr" class="qr" alt="QR di pairing monouso"></section>
     </aside>
     <div class="workspace-main">
       <section class="card video-card"><div class="section-heading"><h2>Remote video</h2><span id="connectionInfo" class="small">In attesa del telefono.</span></div><video id="remoteVideo" class="controller-video" autoplay playsinline></video></section>

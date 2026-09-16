@@ -1,5 +1,5 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
-import { cadValidationError, createInterventionArea, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
+import { cadValidationError, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 
@@ -47,6 +47,10 @@ const areaSelect = document.querySelector('#areaSelect');
 const newAreaBtn = document.querySelector('#newArea');
 const closeAreaBtn = document.querySelector('#closeArea');
 const areaState = document.querySelector('#areaState');
+const areaSection = document.querySelector('#areaSection');
+const sessionSection = document.querySelector('#sessionSection');
+const mobileControllerSection = document.querySelector('#mobileControllerSection');
+const cameraQrSection = document.querySelector('#cameraQrSection');
 const helpButton = document.querySelector('#helpButton');
 const helpDialog = document.querySelector('#helpDialog');
 const closeHelpBtn = document.querySelector('#closeHelp');
@@ -114,13 +118,15 @@ function renderProjects() {
 
 function renderAreas() {
   const project = projectSelect.value;
+  const projectSelected = isProjectSelected(project);
   const areas = areasByProject[project] || [];
   const selected = areaSelect.value;
   areaSelect.replaceChildren(new Option('Nessuna area aperta', ''));
   areas.filter(area => area.status === 'open').forEach(area => areaSelect.add(new Option(area.name, area.id)));
   areaSelect.value = areas.some(area => area.id === selected && area.status === 'open') ? selected : (openAreaForProject(areasByProject, project)?.id || '');
-  newAreaBtn.disabled = !session || session.project !== project;
-  closeAreaBtn.disabled = !areaSelect.value;
+  areaSelect.disabled = !projectSelected;
+  newAreaBtn.disabled = !projectSelected || !session || session.project !== project;
+  closeAreaBtn.disabled = !projectSelected || !areaSelect.value;
   const area = currentArea();
   areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (project && session ? 'Crea o seleziona un’area per iniziare il rilevamento.' : 'Collega prima una sessione al progetto.');
   captureBtn.disabled = !(area && session?.project === project && dc?.readyState === 'open');
@@ -133,17 +139,24 @@ function currentArea() { return (areasByProject[projectSelect.value] || []).find
 
 function updateProjectUi() {
   const project = projectSelect.value;
+  const projectSelected = isProjectSelected(project);
   const cad = cadByProject[project];
   const drawing = cadDrawingByProject[project];
   cadShapes = drawing?.shapes || [];
   cadBounds = drawing?.bounds || null;
   cadView = drawing?.view || (cadBounds && { ...cadBounds });
-  renameProjectBtn.disabled = !project;
-  deleteProjectBtn.disabled = !project;
-  uploadCadBtn.disabled = !project;
+  renameProjectBtn.disabled = !projectSelected;
+  deleteProjectBtn.disabled = !projectSelected;
+  uploadCadBtn.disabled = !projectSelected;
   deleteCadBtn.disabled = !cad;
   addPhotoPointBtn.disabled = !cadShapes.length;
   [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !cadShapes.length);
+  areaSection.setAttribute('aria-disabled', String(!projectSelected));
+  [sessionSection, mobileControllerSection, cameraQrSection].forEach(section => section.setAttribute('aria-disabled', String(!projectSelected)));
+  tokenMode.disabled = !projectSelected;
+  newSessionBtn.disabled = !projectSelected;
+  copyLinkBtn.disabled = !projectSelected || !session || session.project !== project;
+  copyMobileLinkBtn.disabled = !projectSelected || !session || session.project !== project;
   cadFileName.textContent = cad ? `${cad.name} (${formatBytes(cad.size)})` : 'Nessun file CAD caricato.';
   dwgState.textContent = cad ? (/\.dwg$/i.test(cad.name) ? 'DWG caricato: serve un convertitore DWG→DXF lato server per la visualizzazione.' : `File selezionato: ${cad.name}`) : 'Carica un file DWG o DXF per iniziare.';
   renderCad();
@@ -230,6 +243,8 @@ function updateSessionUi() {
   expiryEl.textContent = `${session.project} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
   tokenMode.value = session.tokenMode;
   tokenModeInfo.textContent = session.tokenMode === 'reusable' ? 'Il QR può riagganciare il telefono a questa sessione fino alla scadenza.' : 'Il QR può essere usato una sola volta.';
+  copyLinkBtn.disabled = false;
+  copyMobileLinkBtn.disabled = false;
 }
 
 function resetControls() {
