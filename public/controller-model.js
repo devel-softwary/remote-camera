@@ -21,6 +21,10 @@ export function isProjectSelected(project) {
   return typeof project === 'string' && project.trim().length > 0;
 }
 
+export function canManageAreas(project) {
+  return isProjectSelected(project);
+}
+
 export function photoPointForProject(pointsByProject, project) {
   return Array.isArray(pointsByProject[project]) ? pointsByProject[project] : [];
 }

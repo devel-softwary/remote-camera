@@ -1,5 +1,5 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
-import { cadValidationError, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
+import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 
@@ -125,10 +125,10 @@ function renderAreas() {
   areas.filter(area => area.status === 'open').forEach(area => areaSelect.add(new Option(area.name, area.id)));
   areaSelect.value = areas.some(area => area.id === selected && area.status === 'open') ? selected : (openAreaForProject(areasByProject, project)?.id || '');
   areaSelect.disabled = !projectSelected;
-  newAreaBtn.disabled = !projectSelected || !session || session.project !== project;
+  newAreaBtn.disabled = !canManageAreas(project);
   closeAreaBtn.disabled = !projectSelected || !areaSelect.value;
   const area = currentArea();
-  areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (project && session ? 'Crea o seleziona un’area per iniziare il rilevamento.' : 'Collega prima una sessione al progetto.');
+  areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.');
   captureBtn.disabled = !(area && session?.project === project && dc?.readyState === 'open');
   startPhotoSessionBtn.disabled = true;
   photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
