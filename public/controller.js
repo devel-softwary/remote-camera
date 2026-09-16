@@ -1,5 +1,5 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
-import { addRemoteIceCandidate, flushRemoteIceCandidates } from './webrtc-ice.js';
+import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
 import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
@@ -265,7 +265,8 @@ function createPeer() {
   pc.ontrack = e => {
     video.srcObject = e.streams[0];
     video.play().catch(() => {});
-    connectionInfo.textContent = 'Streaming video collegato.';
+    connectionInfo.textContent = 'Track video ricevuto. Attesa dei frame…';
+    e.track.onunmute = () => { connectionInfo.textContent = 'Streaming video attivo.'; };
   };
   pc.ondatachannel = e => {
     dc = e.channel;
@@ -282,7 +283,11 @@ function createPeer() {
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
     if (s === 'connected') setStatus(statusEl, 'Collegato', 'ok');
-    else if (['failed', 'disconnected', 'closed'].includes(s)) { setStatus(statusEl, `WebRTC ${s}`, 'warn'); resetControls(); }
+    else if (['failed', 'disconnected', 'closed'].includes(s)) {
+      setStatus(statusEl, webRtcFailureMessage(s), 'warn');
+      connectionInfo.textContent = webRtcFailureMessage(s);
+      resetControls();
+    }
     else connectionInfo.textContent = `WebRTC: ${s}`;
   };
 }

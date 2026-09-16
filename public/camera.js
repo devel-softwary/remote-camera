@@ -1,5 +1,5 @@
 import { loadConfig, wsUrl, queryParam, setStatus, formatBytes } from './common.js';
-import { addRemoteIceCandidate, flushRemoteIceCandidates } from './webrtc-ice.js';
+import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -205,7 +205,10 @@ function createPeer() {
   pc.onconnectionstatechange = () => {
     const s = pc.connectionState;
     if (s === 'connected') setStatus(statusEl, 'Video collegato', 'ok');
-    else if (['failed', 'disconnected'].includes(s)) setStatus(statusEl, `WebRTC ${s}`, 'warn');
+    else if (['failed', 'disconnected'].includes(s)) {
+      setStatus(statusEl, webRtcFailureMessage(s), 'warn');
+      infoEl.textContent = webRtcFailureMessage(s);
+    }
   };
 }
 
