@@ -4,6 +4,7 @@ import { createPhotoPoint, drawingBounds, parseDxf } from '../public/cad-viewer.
 import { consumeCameraToken, sessionTokenMode } from '../session-policy.js';
 import { createInterventionArea, nextAreaName, openAreaForProject } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
+import { HELP_STEPS } from '../public/help-content.js';
 
 assert.equal(isCadFile({ name: 'rilievo.DWG' }), true);
 assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
@@ -32,3 +33,9 @@ assert.equal(openAreaForProject({ Progetto: [area] }, 'Progetto'), area);
 assert.equal(safeFolderName('Area 01'), 'Area 01');
 assert.equal(safeFolderName('../segreto'), '');
 assert.equal(photoExtension('image/png'), 'png');
+assert.equal(HELP_STEPS.length, 4);
+assert.deepEqual(HELP_STEPS[2].details, [
+  'Il sistema attende che un cellulare si agganci.',
+  'Token monouso: usabile solo una volta.',
+  'Token riusabile: il cellulare potrà riagganciarsi.'
+]);

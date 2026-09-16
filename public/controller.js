@@ -1,6 +1,7 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { cadValidationError, createInterventionArea, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
+import { HELP_STEPS } from './help-content.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -43,6 +44,10 @@ const areaSelect = document.querySelector('#areaSelect');
 const newAreaBtn = document.querySelector('#newArea');
 const closeAreaBtn = document.querySelector('#closeArea');
 const areaState = document.querySelector('#areaState');
+const helpButton = document.querySelector('#helpButton');
+const helpDialog = document.querySelector('#helpDialog');
+const closeHelpBtn = document.querySelector('#closeHelp');
+const helpSteps = document.querySelector('#helpSteps');
 
 let config, session, ws, pc, dc;
 let captureSeq = 0;
@@ -60,6 +65,23 @@ const cadDrawingByProject = {};
 let addingPhotoPoint = false;
 let selectedPhotoPointId = null;
 let cadPan = null;
+
+function renderHelp() {
+  for (const step of HELP_STEPS) {
+    const item = document.createElement('li');
+    item.textContent = step.title;
+    if (step.details) {
+      const details = document.createElement('ul');
+      step.details.forEach(detail => {
+        const detailItem = document.createElement('li');
+        detailItem.textContent = detail;
+        details.append(detailItem);
+      });
+      item.append(details);
+    }
+    helpSteps.append(item);
+  }
+}
 
 function loadWorkspace() {
   try {
@@ -375,6 +397,12 @@ captureBtn.addEventListener('click', () => {
   sendData({ type: 'capture', requestId });
 });
 
+helpButton.addEventListener('click', () => helpDialog.showModal());
+closeHelpBtn.addEventListener('click', () => helpDialog.close());
+helpDialog.addEventListener('click', event => {
+  if (event.target === helpDialog) helpDialog.close();
+});
+
 let zoomTimer;
 zoom.addEventListener('input', () => {
   zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
@@ -500,6 +528,7 @@ startPhotoSessionBtn.addEventListener('click', async () => {
   // La sessione viene avviata dalla colonna di destra prima della creazione delle aree.
 });
 
+renderHelp();
 loadWorkspace();
 config = await loadConfig();
 setStatus(statusEl, 'Crea un’area', 'warn');
