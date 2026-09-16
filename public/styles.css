@@ -26,7 +26,7 @@ video { width:100%; background:#000; border-radius:16px; aspect-ratio:9/16; obje
 .code { font:700 1.7rem ui-monospace,monospace; letter-spacing:.12em; }
 .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-top:14px; }
 .gallery figure { margin:0; }
-.gallery img { width:100%; border-radius:12px; display:block; }
+.gallery img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px; display:block; }
 .gallery a { color:#b7c8ff; font-size:.85rem; }
 .notice { color:#ffcf70; }
 .small { font-size:.85rem; }

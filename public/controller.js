@@ -4,6 +4,7 @@ import { cadValidationError, canManageAreas, createInterventionArea, isProjectSe
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
+import { createThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -382,22 +383,25 @@ function finishPhoto() {
   const p = pendingPhoto;
   pendingPhoto = null;
   const blob = new Blob(p.chunks, { type: p.meta.mime || 'image/jpeg' });
-  const url = URL.createObjectURL(blob);
-  savePhoto(blob, p.meta, p.area, url).catch(err => {
-    URL.revokeObjectURL(url);
+  savePhoto(blob, p.meta, p.area).catch(err => {
     captureState.textContent = `Errore archivio: ${err.message}`;
     captureBtn.disabled = false;
   });
 }
 
-async function savePhoto(blob, meta, selectedArea, previewUrl) {
+async function savePhoto(blob, meta, selectedArea) {
   if (!selectedArea || selectedArea.status !== 'open') throw new Error('L’area di intervento non è più aperta.');
   const response = await fetch('/api/photos', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name }, body: blob });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Salvataggio non riuscito');
   const saved = await response.json();
   const area = (areasByProject[session.project] || []).find(item => item.id === selectedArea.id);
   if (!area) throw new Error('Area non disponibile');
-  area.photos.push({ url: saved.url, previewUrl, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
+  const photoId = crypto.randomUUID();
+  const thumbnailKey = thumbnailStorageKey(session.project, area.id, photoId);
+  try {
+    await saveThumbnail(thumbnailKey, await createThumbnail(blob));
+  } catch { /* l'originale resta disponibile anche se lo storage del browser è pieno */ }
+  area.photos.push({ id: photoId, url: saved.url, thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
   renderGallery();
   sendSignal({ type: 'photo-saved', photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
@@ -421,13 +425,24 @@ function renderGallery() {
     const items = document.createElement('div'); items.className = 'gallery';
     for (const photo of area.photos) {
       const figure = document.createElement('figure');
-      const img = document.createElement('img'); img.src = photo.previewUrl || photo.url; img.alt = `Foto ${area.name}`;
+      const img = document.createElement('img'); img.src = photo.url; img.alt = `Foto ${area.name}`;
+      showStoredThumbnail(img, photo);
       const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const link = document.createElement('a'); link.href = photo.url; link.download = ''; link.textContent = 'Scarica originale';
       figure.append(img, meta, link); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
   }
+}
+
+function showStoredThumbnail(img, photo) {
+  if (!photo.thumbnailKey) return;
+  loadThumbnail(photo.thumbnailKey).then(blob => {
+    if (!blob || !img.isConnected) return;
+    const url = URL.createObjectURL(blob);
+    img.onload = () => URL.revokeObjectURL(url);
+    img.src = url;
+  }).catch(() => {});
 }
 
 captureBtn.addEventListener('click', () => {
