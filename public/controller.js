@@ -3,6 +3,7 @@ import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage }
 import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
+import { cameraSessionLink, mobileControllerSessionLink } from './session-links.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -236,8 +237,8 @@ async function createSession() {
 
 function updateSessionUi() {
   roomCode.textContent = session.room;
-  const cameraUrl = `${config.baseUrl}/camera.html?room=${encodeURIComponent(session.room)}&token=${encodeURIComponent(session.cameraToken)}`;
-  const mobileUrl = `${config.baseUrl}/mobile-controller.html?room=${encodeURIComponent(session.room)}&token=${encodeURIComponent(session.mobileControllerToken)}`;
+  const cameraUrl = cameraSessionLink(config.baseUrl, session.room, session.cameraToken);
+  const mobileUrl = mobileControllerSessionLink(config.baseUrl, session.room, session.mobileControllerToken);
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
   mobileUrlEl.textContent = mobileUrl;
@@ -485,7 +486,7 @@ tokenMode.addEventListener('change', () => {
 
 copyLinkBtn.addEventListener('click', async () => {
   const text = cameraUrlEl.textContent;
-  try { await navigator.clipboard.writeText(text); copyLinkBtn.textContent = 'Link copiato'; setTimeout(() => copyLinkBtn.textContent = 'Copia link camera', 1500); }
+  try { await navigator.clipboard.writeText(text); copyLinkBtn.textContent = 'Link copiato'; setTimeout(() => copyLinkBtn.textContent = 'Copia link QR', 1500); }
   catch { window.prompt('Copia questo link:', text); }
 });
 
