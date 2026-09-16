@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MAX_CAD_SIZE, cadValidationError, canDownloadSelectedProject, canManageAreas, isCadFile, isProjectSelected, nextProjectName } from '../public/controller-model.js';
+import { MAX_CAD_SIZE, cadValidationError, canDownloadProject, canManageAreas, isCadFile, isProjectSelected, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { createInterventionArea, nextAreaName, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
@@ -17,8 +17,8 @@ assert.equal(isProjectSelected('Rilievo 02'), true);
 assert.equal(isProjectSelected('   '), false);
 assert.equal(canManageAreas('Rilievo 02'), true);
 assert.equal(canManageAreas(''), false);
-assert.equal(canDownloadSelectedProject('Rilievo 02', { id: 'area-1' }), true);
-assert.equal(canDownloadSelectedProject('Rilievo 02', null), false);
+assert.equal(canDownloadProject('Rilievo 02'), true);
+assert.equal(canDownloadProject(''), false);
 const shapes = parseDxf('0\nLINE\n10\n0\n20\n0\n11\n20\n21\n10\n0\nEOF\n');
 assert.deepEqual(shapes, [{ type: 'line', x1: 0, y1: 0, x2: 20, y2: 10 }]);
 assert.ok(drawingBounds(shapes).width > 20);
