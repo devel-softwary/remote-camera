@@ -3,6 +3,7 @@ services:
     container_name: remote-camera-poc
     build: .
     restart: unless-stopped
+    user: "${PUID:-1000}:${PGID:-1000}"
     environment:
       PORT: 3000
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}

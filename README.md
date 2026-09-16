@@ -65,6 +65,8 @@ docker compose up -d --build
 
 Le foto vengono scritte automaticamente in `./uploads/<progetto>/<area>` sul computer host. Per l'avvio senza Docker, imposta `PHOTO_STORAGE_DIR` con un percorso assoluto, oppure usa la cartella `uploads` del progetto.
 
+Il container usa `PUID` e `PGID` per salvare le foto con l'utente host. Impostali in `.env` con `id -u` e `id -g`. Per correggere file già creati come root, esegui una volta `sudo chown -R $(id -u):$(id -g) uploads` e riavvia il container.
+
 ## Dispositivi su reti diverse
 
 Lo STUN pubblico è sufficiente in molte reti, ma non in tutte. Per una soluzione affidabile serve un server TURN (ad esempio coturn):
