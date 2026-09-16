@@ -15,11 +15,12 @@ const room = queryParam('room').toUpperCase();
 const authToken = queryParam('token');
 if (!window.isSecureContext) secureWarning.classList.remove('hidden');
 
-let config, ws, pc, dc, stream, currentTrack, sender;
+let config, ws, pc, dc, mobilePc, mobileDc, stream, currentTrack, sender, mobileSender;
 let cameras = [];
 let currentDeviceId = '';
 let photoBusy = false;
 let cameraBusy = false;
+let centralOfferSent = false;
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -49,6 +50,9 @@ function sendSignal(msg) {
 }
 function sendData(msg) {
   if (dc?.readyState === 'open') dc.send(JSON.stringify(msg));
+}
+function sendMobileData(msg) {
+  if (mobileDc?.readyState === 'open') mobileDc.send(JSON.stringify(msg));
 }
 
 async function enumerateCameras() {
@@ -81,6 +85,7 @@ function publishCameraInfo() {
   renderCameraSelect();
   const payload = capabilitiesPayload();
   sendData({ type: 'camera-info', ...payload });
+  sendMobileData({ type: 'camera-info', ...payload });
   const s = payload.settings || {};
   controlsInfo.textContent = `${payload.label || 'Camera'} • ${s.width || '?'}×${s.height || '?'}${s.frameRate ? ` • ${Math.round(s.frameRate)} fps` : ''}`;
 }
@@ -112,6 +117,7 @@ async function openCamera(deviceId = '') {
 
   try {
     if (sender) await sender.replaceTrack(nextTrack);
+    if (mobileSender) await mobileSender.replaceTrack(nextTrack);
   } catch (err) {
     nextStream.getTracks().forEach(track => track.stop());
     throw err;
@@ -199,10 +205,30 @@ function createPeer() {
   };
 }
 
-async function sendOffer() {
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  sendSignal({ type: 'webrtc-offer', sdp: pc.localDescription });
+function createMobilePeer() {
+  if (mobilePc) mobilePc.close();
+  mobilePc = new RTCPeerConnection({ iceServers: config.iceServers });
+  mobileSender = mobilePc.addTrack(currentTrack, stream);
+  mobileDc = mobilePc.createDataChannel('remote-control', { ordered: true });
+  mobileDc.binaryType = 'arraybuffer';
+  mobileDc.onopen = () => publishCameraInfo();
+  mobileDc.onmessage = async e => {
+    if (typeof e.data !== 'string') return;
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    try { await handleCommand(msg); sendMobileData({ type: 'command-complete', command: msg.type, requestId: msg.requestId }); }
+    catch (err) { sendMobileData({ type: 'command-error', command: msg.type, requestId: msg.requestId, message: err.message }); }
+  };
+  mobilePc.onicecandidate = e => e.candidate && sendSignal({ type: 'ice-candidate', candidate: e.candidate, targetRole: 'controller-mobile' });
+  mobilePc.onconnectionstatechange = () => {
+    if (['failed', 'closed'].includes(mobilePc.connectionState)) { mobilePc = mobileDc = mobileSender = undefined; }
+  };
+}
+
+async function sendOffer(targetRole = 'controller-central') {
+  const peer = targetRole === 'controller-mobile' ? mobilePc : pc;
+  const offer = await peer.createOffer();
+  await peer.setLocalDescription(offer);
+  sendSignal({ type: 'webrtc-offer', sdp: peer.localDescription, targetRole });
 }
 
 async function applyAdvanced(obj) {
@@ -290,9 +316,25 @@ function connectWs() {
     try {
       if (msg.type === 'error') throw new Error(msg.message);
       if (msg.type === 'joined') setStatus(statusEl, `Pairing ${msg.room} riuscito`, 'ok');
-      else if (msg.type === 'session-status' && msg.controller) await sendOffer();
-      else if (msg.type === 'webrtc-answer') await pc.setRemoteDescription(msg.sdp);
-      else if (msg.type === 'ice-candidate' && msg.candidate) await pc.addIceCandidate(msg.candidate);
+      else if (msg.type === 'session-status') {
+        if (msg.controller && !centralOfferSent) { await sendOffer('controller-central'); centralOfferSent = true; }
+        if (!msg.controller) centralOfferSent = false;
+        if (msg.mobileController && !mobilePc) { createMobilePeer(); await sendOffer('controller-mobile'); }
+        if (!msg.mobileController && mobilePc) { mobilePc.close(); mobilePc = mobileDc = mobileSender = undefined; }
+      } else if (msg.type === 'webrtc-answer') {
+        const peer = msg.from === 'controller-mobile' ? mobilePc : pc;
+        if (peer) await peer.setRemoteDescription(msg.sdp);
+      } else if (msg.type === 'ice-candidate' && msg.candidate) {
+        const peer = msg.from === 'controller-mobile' ? mobilePc : pc;
+        if (peer) await peer.addIceCandidate(msg.candidate);
+      } else if (msg.type === 'camera-command') {
+        try {
+          await handleCommand(msg.command || {});
+          sendSignal({ type: 'camera-command-result', result: { ok: true, command: msg.command?.type, requestId: msg.command?.requestId } });
+        } catch (err) {
+          sendSignal({ type: 'camera-command-result', result: { ok: false, command: msg.command?.type, requestId: msg.command?.requestId, message: err.message } });
+        }
+      }
     } catch (err) {
       infoEl.textContent = `Errore: ${err.message}`;
       setStatus(statusEl, err.message, 'warn');
@@ -344,7 +386,7 @@ startBtn.addEventListener('click', async () => {
     ws?.close();
     pc?.close();
     stream?.getTracks().forEach(track => track.stop());
-    ws = pc = dc = stream = currentTrack = sender = undefined;
+    ws = pc = dc = mobilePc = mobileDc = stream = currentTrack = sender = mobileSender = undefined;
     localCameraSelect.disabled = true;
     video.srcObject = null;
     controlsInfo.textContent = 'Camera non avviata.';

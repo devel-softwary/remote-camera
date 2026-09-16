@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Remote Camera - Controller mobile</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main class="mobile-controller">
+  <header class="controller-header"><div><h1>Controller mobile</h1><p id="area" class="small">Connessione alla sessione…</p></div><span id="status" class="status"><span class="dot"></span><span class="status-text">Connessione…</span></span></header>
+  <section class="card video-card"><video id="remoteVideo" autoplay playsinline></video></section>
+  <section class="card"><div class="control-grid">
+    <label id="zoomGroup">Zoom <span id="zoomValue" class="value">N/D</span><input id="zoom" type="range" disabled></label>
+    <div class="button-control"><span>Illuminazione</span><button id="torch" class="secondary" disabled>🔦 Torcia OFF</button></div>
+    <div class="button-control"><span>Messa a fuoco</span><button id="focus" class="secondary" disabled>◎ Autofocus</button></div>
+  </div><div class="capture-bar"><button id="capture" class="capture" disabled>📷 Scatta foto</button><span id="info" class="small">In attesa della camera.</span></div></section>
+</main><script type="module" src="/mobile-controller.js"></script></body></html>

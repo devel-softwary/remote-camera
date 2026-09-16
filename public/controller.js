@@ -8,6 +8,9 @@ const cameraUrlEl = document.querySelector('#cameraUrl');
 const qr = document.querySelector('#qr');
 const newSessionBtn = document.querySelector('#newSession');
 const copyLinkBtn = document.querySelector('#copyLink');
+const copyMobileLinkBtn = document.querySelector('#copyMobileLink');
+const mobileUrlEl = document.querySelector('#mobileUrl');
+const mobileQr = document.querySelector('#mobileQr');
 const video = document.querySelector('#remoteVideo');
 const statusEl = document.querySelector('#status');
 const connectionInfo = document.querySelector('#connectionInfo');
@@ -219,8 +222,11 @@ async function createSession() {
 function updateSessionUi() {
   roomCode.textContent = session.room;
   const cameraUrl = `${config.baseUrl}/camera.html?room=${encodeURIComponent(session.room)}&token=${encodeURIComponent(session.cameraToken)}`;
+  const mobileUrl = `${config.baseUrl}/mobile-controller.html?room=${encodeURIComponent(session.room)}&token=${encodeURIComponent(session.mobileControllerToken)}`;
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
+  mobileUrlEl.textContent = mobileUrl;
+  mobileQr.src = `/api/qr?text=${encodeURIComponent(mobileUrl)}`;
   expiryEl.textContent = `${session.project} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}; il token camera è utilizzabile una sola volta.`;
   tokenMode.value = session.tokenMode;
   tokenModeInfo.textContent = session.tokenMode === 'reusable' ? 'Il QR può riagganciare il telefono a questa sessione fino alla scadenza.' : 'Il QR può essere usato una sola volta.';
@@ -264,14 +270,14 @@ function connectWs() {
   resetControls();
   createPeer();
   ws = new WebSocket(wsUrl());
-  ws.onopen = () => sendSignal({ type: 'join', room: session.room, role: 'controller', token: session.controllerToken });
+  ws.onopen = () => sendSignal({ type: 'join', room: session.room, role: 'controller-central', token: session.controllerToken });
   ws.onclose = () => { setStatus(statusEl, 'Server disconnesso', 'warn'); resetControls(); };
   ws.onerror = () => setStatus(statusEl, 'Errore WebSocket', 'warn');
   ws.onmessage = async event => {
     const msg = JSON.parse(event.data);
     try {
       if (msg.type === 'error') throw new Error(msg.message);
-      if (msg.type === 'joined') setStatus(statusEl, `Sessione ${msg.room}`, 'ok');
+      if (msg.type === 'joined') { setStatus(statusEl, `Sessione ${msg.room}`, 'ok'); publishActiveArea(); }
       else if (msg.type === 'session-status' && !msg.camera) {
         setStatus(statusEl, 'In attesa del telefono', 'warn');
         connectionInfo.textContent = 'Scansiona il QR dal telefono camera.';
@@ -365,8 +371,14 @@ async function savePhoto(blob, meta, selectedArea, previewUrl) {
   area.photos.push({ url: saved.url, previewUrl, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
   renderGallery();
+  sendSignal({ type: 'photo-saved', photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
   captureState.textContent = `Foto archiviata in “${area.name}”: ${formatBytes(blob.size)}.`;
   captureBtn.disabled = false;
+}
+
+function publishActiveArea() {
+  const area = currentArea();
+  if (session && session.project === projectSelect.value) sendSignal({ type: 'session-area', area: area?.name || '' });
 }
 
 function renderGallery() {
@@ -444,21 +456,28 @@ copyLinkBtn.addEventListener('click', async () => {
   catch { window.prompt('Copia questo link:', text); }
 });
 
+copyMobileLinkBtn.addEventListener('click', async () => {
+  const text = mobileUrlEl.textContent;
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); copyMobileLinkBtn.textContent = 'Link copiato'; setTimeout(() => copyMobileLinkBtn.textContent = 'Copia link controller', 1500); }
+  catch { window.prompt('Copia questo link:', text); }
+});
+
 projectSelect.addEventListener('change', updateProjectUi);
 
-areaSelect.addEventListener('change', () => { renderAreas(); });
+areaSelect.addEventListener('change', () => { renderAreas(); publishActiveArea(); });
 newAreaBtn.addEventListener('click', () => {
   const project = projectSelect.value; const areas = areasByProject[project] || [];
   const name = nextAreaName(areas, window.prompt('Nome area di intervento:', '') || '');
   if (!name) return;
   (areasByProject[project] ||= []).push(createInterventionArea(areas, name));
-  saveWorkspace(); renderAreas();
+  saveWorkspace(); renderAreas(); publishActiveArea();
 });
 closeAreaBtn.addEventListener('click', () => {
   const area = currentArea();
   if (!area || !window.confirm(`Chiudere l’area “${area.name}”? Le foto resteranno nella sua cartella.`)) return;
   area.status = 'closed';
-  saveWorkspace(); renderAreas();
+  saveWorkspace(); renderAreas(); publishActiveArea();
 });
 
 newProjectBtn.addEventListener('click', () => {

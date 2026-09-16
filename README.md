@@ -8,6 +8,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - signaling e comando di scatto via WebSocket
 - stanza con codice casuale
 - QR code per aprire direttamente la camera del telefono
+- secondo QR per un controller mobile concorrente
 - camera anteriore/posteriore
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
@@ -81,12 +82,13 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 4. Premi **Avvia camera** e concedi il permesso.
 5. Scatta le foto: vengono archiviate nell'area selezionata. Cambia area per associare gli scatti successivi a un'altra cartella.
 6. Chiudi l'area: le foto restano nella sua cartella; puoi aprirne un'altra.
+7. Scansiona il QR del controller mobile dal laptop: mostra il video e consente scatto, zoom, torcia e autofocus senza modificare progetto o area.
 
 ## Limiti del POC
 
 - le foto transitano come Data URL JSON su WebSocket: semplice, ma non ottimale per immagini molto grandi;
 - non c'è autenticazione;
-- una stanza supporta un solo controller e una sola camera;
+- una stanza supporta un controller centrale, un controller mobile e una camera; solo il centrale gestisce progetto, area e salvataggio;
 - nessuna persistenza lato server;
 - la PWA/browser deve restare attiva: schermo bloccato/background può sospendere camera e WebRTC;
 - per produzione conviene trasferire la foto in binario o via upload HTTP firmato e aggiungere autenticazione, timeout e controllo accessi.
