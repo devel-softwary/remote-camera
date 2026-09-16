@@ -1,4 +1,5 @@
 import { loadConfig, wsUrl, queryParam, setStatus, formatBytes } from './common.js';
+import { addRemoteIceCandidate, flushRemoteIceCandidates } from './webrtc-ice.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -21,6 +22,8 @@ let currentDeviceId = '';
 let photoBusy = false;
 let cameraBusy = false;
 let centralOfferSent = false;
+let pendingCentralIceCandidates = [];
+let pendingMobileIceCandidates = [];
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -178,6 +181,7 @@ localCameraSelect.addEventListener('change', async () => {
 
 function createPeer() {
   if (pc) pc.close();
+  pendingCentralIceCandidates = [];
   pc = new RTCPeerConnection({ iceServers: config.iceServers });
   sender = pc.addTrack(currentTrack, stream);
   dc = pc.createDataChannel('remote-control', { ordered: true });
@@ -207,6 +211,7 @@ function createPeer() {
 
 function createMobilePeer() {
   if (mobilePc) mobilePc.close();
+  pendingMobileIceCandidates = [];
   mobilePc = new RTCPeerConnection({ iceServers: config.iceServers });
   mobileSender = mobilePc.addTrack(currentTrack, stream);
   mobileDc = mobilePc.createDataChannel('remote-control', { ordered: true });
@@ -323,10 +328,15 @@ function connectWs() {
         if (!msg.mobileController && mobilePc) { mobilePc.close(); mobilePc = mobileDc = mobileSender = undefined; }
       } else if (msg.type === 'webrtc-answer') {
         const peer = msg.from === 'controller-mobile' ? mobilePc : pc;
-        if (peer) await peer.setRemoteDescription(msg.sdp);
+        const pendingCandidates = msg.from === 'controller-mobile' ? pendingMobileIceCandidates : pendingCentralIceCandidates;
+        if (peer) {
+          await peer.setRemoteDescription(msg.sdp);
+          await flushRemoteIceCandidates(peer, pendingCandidates);
+        }
       } else if (msg.type === 'ice-candidate' && msg.candidate) {
         const peer = msg.from === 'controller-mobile' ? mobilePc : pc;
-        if (peer) await peer.addIceCandidate(msg.candidate);
+        const pendingCandidates = msg.from === 'controller-mobile' ? pendingMobileIceCandidates : pendingCentralIceCandidates;
+        if (peer) await addRemoteIceCandidate(peer, pendingCandidates, msg.candidate);
       } else if (msg.type === 'camera-command') {
         try {
           await handleCommand(msg.command || {});

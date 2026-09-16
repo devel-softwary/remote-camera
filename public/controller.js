@@ -1,4 +1,5 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
+import { addRemoteIceCandidate, flushRemoteIceCandidates } from './webrtc-ice.js';
 import { cadValidationError, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
@@ -57,6 +58,7 @@ const closeHelpBtn = document.querySelector('#closeHelp');
 const helpSteps = document.querySelector('#helpSteps');
 
 let config, session, ws, pc, dc;
+let pendingIceCandidates = [];
 let captureSeq = 0;
 let pendingPhoto = null;
 let torchOn = false;
@@ -258,8 +260,13 @@ function resetControls() {
 
 function createPeer() {
   if (pc) pc.close();
+  pendingIceCandidates = [];
   pc = new RTCPeerConnection({ iceServers: config.iceServers });
-  pc.ontrack = e => { video.srcObject = e.streams[0]; };
+  pc.ontrack = e => {
+    video.srcObject = e.streams[0];
+    video.play().catch(() => {});
+    connectionInfo.textContent = 'Streaming video collegato.';
+  };
   pc.ondatachannel = e => {
     dc = e.channel;
     dc.binaryType = 'arraybuffer';
@@ -293,15 +300,21 @@ function connectWs() {
     try {
       if (msg.type === 'error') throw new Error(msg.message);
       if (msg.type === 'joined') { setStatus(statusEl, `Sessione ${msg.room}`, 'ok'); publishActiveArea(); }
-      else if (msg.type === 'session-status' && !msg.camera) {
-        setStatus(statusEl, 'In attesa del telefono', 'warn');
-        connectionInfo.textContent = 'Scansiona il QR dal telefono camera.';
+      else if (msg.type === 'session-status') {
+        if (!msg.camera) {
+          setStatus(statusEl, 'In attesa del telefono', 'warn');
+          connectionInfo.textContent = 'Scansiona il QR dal telefono camera.';
+        } else if (pc.connectionState !== 'connected') {
+          setStatus(statusEl, 'Telefono collegato', 'ok');
+          connectionInfo.textContent = 'Connessione video in corso…';
+        }
       } else if (msg.type === 'webrtc-offer') {
         await pc.setRemoteDescription(msg.sdp);
+        await flushRemoteIceCandidates(pc, pendingIceCandidates);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         sendSignal({ type: 'webrtc-answer', sdp: pc.localDescription });
-      } else if (msg.type === 'ice-candidate' && msg.candidate) await pc.addIceCandidate(msg.candidate);
+      } else if (msg.type === 'ice-candidate' && msg.candidate) await addRemoteIceCandidate(pc, pendingIceCandidates, msg.candidate);
     } catch (err) { setStatus(statusEl, err.message, 'warn'); }
   };
 }

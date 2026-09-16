@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-const source = readFileSync(new URL('../public/camera.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/, '');
+const source = readFileSync(new URL('../public/camera.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
 const result = await (async () => {
 
 const init = new Function('document','window','navigator','localStorage','loadConfig','wsUrl','queryParam','setStatus','formatBytes','WebSocket','RTCPeerConnection','setTimeout', source + '\nreturn {start,switchCamera,handleCommand};');
@@ -33,4 +33,3 @@ return '4 regression scenarios passed';
 
 })();
 console.log(result);
-
