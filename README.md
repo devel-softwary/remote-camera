@@ -14,6 +14,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
 - aree di intervento nominate, con foto archiviate in `uploads/<progetto>/<area>`
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
+- download ZIP dell'intero progetto dal controller, con struttura per area
 - STUN incluso; TURN configurabile via variabili d'ambiente
 
 ## Avvio rapido
@@ -87,6 +88,7 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 4. Premi **Avvia camera** e concedi il permesso.
 5. Scatta le foto: vengono archiviate nell'area associata al QR. Lo stesso QR può riconnettere il dispositivo fino alla scadenza.
 6. Per un'altra area, crea una nuova sessione: le foto restano nella rispettiva cartella.
+7. Con la sessione aperta, seleziona il progetto e premi **Scarica ZIP** per salvarne tutte le foto sul computer del browser.
 
 ## Limiti del POC
 

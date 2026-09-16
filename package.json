@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/camera-switch.test.js && node tests/controller-model.test.js && node tests/session-links.test.js && node tests/session-peers.test.js && node tests/webrtc-ice.test.js && node tests/static-options.test.js && node tests/docker-compose.test.js && node tests/photo-thumbnails.test.js",
+    "test": "node tests/camera-switch.test.js && node tests/controller-model.test.js && node tests/session-links.test.js && node tests/session-peers.test.js && node tests/webrtc-ice.test.js && node tests/static-options.test.js && node tests/docker-compose.test.js && node tests/photo-thumbnails.test.js && node tests/project-download.test.js",
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "express": "^5.1.0",
     "qrcode": "^1.5.4",
     "ws": "^8.18.3"

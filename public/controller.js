@@ -28,6 +28,7 @@ const expiryEl = document.querySelector('#expiry');
 const projectSelect = document.querySelector('#projectSelect');
 const newProjectBtn = document.querySelector('#newProject');
 const renameProjectBtn = document.querySelector('#renameProject');
+const downloadProjectBtn = document.querySelector('#downloadProject');
 const deleteProjectBtn = document.querySelector('#deleteProject');
 const cadFile = document.querySelector('#cadFile');
 const uploadCadBtn = document.querySelector('#uploadCad');
@@ -152,6 +153,7 @@ function updateProjectUi() {
   cadView = drawing?.view || (cadBounds && { ...cadBounds });
   renameProjectBtn.disabled = !projectSelected;
   deleteProjectBtn.disabled = !projectSelected;
+  downloadProjectBtn.disabled = !(session?.project === project && session?.controllerToken);
   uploadCadBtn.disabled = !projectSelected;
   deleteCadBtn.disabled = !cad;
   addPhotoPointBtn.disabled = !cadShapes.length;
@@ -494,6 +496,31 @@ copyLinkBtn.addEventListener('click', async () => {
   const text = cameraUrlEl.textContent;
   try { await navigator.clipboard.writeText(text); copyLinkBtn.textContent = 'Link copiato'; setTimeout(() => copyLinkBtn.textContent = 'Copia link QR', 1500); }
   catch { window.prompt('Copia questo link:', text); }
+});
+
+downloadProjectBtn.addEventListener('click', async () => {
+  if (!session || session.project !== projectSelect.value) return;
+  downloadProjectBtn.disabled = true;
+  const originalLabel = downloadProjectBtn.textContent;
+  downloadProjectBtn.textContent = 'Preparazione…';
+  try {
+    const response = await fetch(`/api/projects/${encodeURIComponent(session.project)}/download`, {
+      method: 'POST',
+      headers: { 'x-room': session.room, 'x-controller-token': session.controllerToken }
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Download non riuscito');
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${session.project}.zip`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    window.alert(error.message);
+  } finally {
+    downloadProjectBtn.textContent = originalLabel;
+    updateProjectUi();
+  }
 });
 
 projectSelect.addEventListener('change', updateProjectUi);

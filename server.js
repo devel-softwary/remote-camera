@@ -7,8 +7,10 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
+import archiver from 'archiver';
 import { createSessionBinding, matchesSessionBinding } from './session-policy.js';
 import { photoExtension, photoStorageDirectory, safeFolderName } from './storage-policy.js';
+import { canDownloadProject, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
 
@@ -105,6 +107,29 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   fs.mkdirSync(folder, { recursive: true, mode: 0o750 });
   fs.writeFileSync(path.join(folder, filename), req.body, { mode: 0o640 });
   res.status(201).json({ url: `/uploads/${encodeURIComponent(project)}/${encodeURIComponent(area)}/${filename}` });
+});
+
+app.post('/api/projects/:project/download', (req, res) => {
+  const project = safeFolderName(req.params.project);
+  const room = String(req.get('x-room') || '').toUpperCase();
+  const suppliedToken = String(req.get('x-controller-token') || '');
+  const session = sessions.get(room);
+  if (!project || !canDownloadProject(session, project, suppliedToken, tokensEqual)) {
+    return res.status(401).json({ message: 'Download progetto non autorizzato.' });
+  }
+
+  const projectDir = projectArchiveRoot(uploadsDir, project);
+  if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
+    return res.status(404).json({ message: 'Il progetto non contiene foto archiviate.' });
+  }
+
+  res.attachment(projectArchiveName(project));
+  res.type('application/zip');
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', () => res.destroy());
+  archive.pipe(res);
+  archive.directory(projectDir, project);
+  archive.finalize();
 });
 
 app.get('/api/qr', async (req, res) => {
