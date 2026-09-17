@@ -241,8 +241,9 @@ wss.on('connection', (ws) => {
       relayPeer(ws, { ...msg, from: ws.role });
     } else if (msg.type === 'session-area' && ws.role === CENTRAL_ROLE) {
       const area = safeFolderName(msg.area);
-      if (area !== session.area) return safeSend(ws, { type: 'command-error', message: 'La sessione è vincolata a un’altra area.' });
-      session.activeArea = session.area;
+      if (!area) return safeSend(ws, { type: 'command-error', message: 'Area di intervento non valida.' });
+      session.area = area;
+      session.activeArea = area;
       sendSessionStatus(session);
     } else if (msg.type === 'photo-saved' && ws.role === CENTRAL_ROLE) {
       eachController(session, { type: 'photo-saved', area: session.activeArea, photo: msg.photo || null });

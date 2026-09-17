@@ -67,3 +67,7 @@ export function reopenInterventionArea(area) {
 export function openAreaForProject(areasByProject, project) {
   return (areasByProject[project] || []).find(area => area.status === 'open') || null;
 }
+
+export function canCaptureArea(area, session, project, channelState) {
+  return Boolean(area && session?.project === project && channelState === 'open');
+}

@@ -5,7 +5,7 @@ export const HELP_STEPS = [
     title: 'Avvia una sessione',
     details: [
       'Seleziona prima l’area di intervento.',
-      'Il QR è vincolato alla coppia progetto-area.',
+      'Il QR è vincolato al progetto; puoi cambiare area senza scollegare la camera.',
       'Il cellulare potrà riagganciarsi fino alla scadenza.'
     ]
   },

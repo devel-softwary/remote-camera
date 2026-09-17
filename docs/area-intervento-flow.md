@@ -2,8 +2,8 @@
 
 1. Creare o selezionare un progetto.
 2. Con un DXF visualizzato, usare “Nuova area” e disegnare almeno tre vertici sulla planimetria; alla conferma assegnare un nome univoco. Le aree precedenti senza geometria restano supportate.
-3. Avviare la sessione QR: il token è riusabile fino alla scadenza ed è vincolato alla coppia progetto-area.
-4. Ogni foto viene autorizzata dalla sessione e salvata in `uploads/<progetto>/<area>` associata al token.
+3. Avviare la sessione QR: il token è riusabile fino alla scadenza ed è vincolato al progetto. Il controller centrale può cambiare l'area attiva senza scollegare la camera.
+4. Ogni foto viene autorizzata dalla sessione e salvata in `uploads/<progetto>/<area>` dell'area attiva.
 5. Chiudere l'area per bloccare nuovi scatti; è possibile riaprirla senza perdere le foto già archiviate.
 
 I nomi di progetto e area non possono contenere separatori di percorso o caratteri riservati.

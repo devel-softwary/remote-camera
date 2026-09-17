@@ -20,7 +20,7 @@ Entrambi vedono stato, anteprima e risultati. Il laptop conserva le azioni di ge
 | Salvare foto nell'area selezionata | Sì | No |
 | Vedere video e stato camera | Sì | Sì |
 
-L'area attiva è unica e viene scelta dal controller centrale. Il mobile la visualizza prima di inoltrare uno scatto. Questo evita che un comando remoto salvi una foto nell'area errata.
+L'area attiva è unica e viene scelta dal controller centrale. Il mobile la visualizza prima di inoltrare uno scatto. La camera resta connessa quando l'area cambia; il server autorizza il salvataggio solo nell'area attiva del progetto della sessione.
 
 ## Architettura proposta
 

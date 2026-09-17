@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { cadValidationError, canCreateMappedArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
+import { cadValidationError, canCaptureArea, canCreateMappedArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -136,7 +136,7 @@ function renderAreas() {
   reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
   areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Area “${selectedArea.name}” chiusa. Riaprila per aggiungere foto.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.'));
-  captureBtn.disabled = !(area && session?.project === project && session.area === area.name && dc?.readyState === 'open');
+  captureBtn.disabled = !canCaptureArea(area, session, project, dc?.readyState);
   newSessionBtn.disabled = !(projectSelected && area);
   photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
   renderGallery();
@@ -272,7 +272,7 @@ function updateSessionUi() {
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
   expiryEl.textContent = `${session.project} • ${session.area} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}.`;
-  tokenModeInfo.textContent = `QR riusabile: riconnette il telefono a “${session.project} • ${session.area}” fino alla scadenza.`;
+  tokenModeInfo.textContent = `QR riusabile per “${session.project}”: puoi cambiare area senza scollegare la camera.`;
   copyLinkBtn.disabled = false;
 }
 
@@ -299,7 +299,7 @@ function createPeer() {
     dc = e.channel;
     dc.binaryType = 'arraybuffer';
     dc.onopen = () => {
-      captureBtn.disabled = !(currentArea() && session?.project === projectSelect.value && session.area === currentArea().name);
+      captureBtn.disabled = !canCaptureArea(currentArea(), session, projectSelect.value, dc?.readyState);
       connectionInfo.textContent = 'Video + canale dati collegati.';
       sendData({ type: 'get-camera-info' });
     };
@@ -441,7 +441,10 @@ async function savePhoto(blob, meta, selectedArea) {
 
 function publishActiveArea() {
   const area = currentArea();
-  if (session && session.project === projectSelect.value && session.area === area?.name) sendSignal({ type: 'session-area', area: area.name });
+  if (!area || !session || session.project !== projectSelect.value) return;
+  session.area = area.name;
+  expiryEl.textContent = `${session.project} • ${session.area} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}.`;
+  sendSignal({ type: 'session-area', area: area.name });
 }
 
 function renderGallery() {
@@ -476,7 +479,7 @@ function showStoredThumbnail(img, photo) {
 }
 
 captureBtn.addEventListener('click', () => {
-  if (dc?.readyState !== 'open' || session?.project !== projectSelect.value || session.area !== currentArea()?.name) return;
+  if (!canCaptureArea(currentArea(), session, projectSelect.value, dc?.readyState)) return;
   captureBtn.disabled = true;
   const requestId = `${Date.now()}-${++captureSeq}`;
   captureState.textContent = 'Scatto full-resolution in corso…';

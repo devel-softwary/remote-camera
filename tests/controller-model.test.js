@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MAX_CAD_SIZE, cadValidationError, canDownloadProject, canManageAreas, isCadFile, isProjectSelected, nextProjectName } from '../public/controller-model.js';
+import { MAX_CAD_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isProjectSelected, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
@@ -17,6 +17,9 @@ assert.equal(isProjectSelected('Rilievo 02'), true);
 assert.equal(isProjectSelected('   '), false);
 assert.equal(canManageAreas('Rilievo 02'), true);
 assert.equal(canManageAreas(''), false);
+assert.equal(canCaptureArea({ name: 'Area nord' }, { project: 'Rilievo 02', area: 'Area sud' }, 'Rilievo 02', 'open'), true);
+assert.equal(canCaptureArea({ name: 'Area nord' }, { project: 'Altro progetto' }, 'Rilievo 02', 'open'), false);
+assert.equal(canCaptureArea({ name: 'Area nord' }, { project: 'Rilievo 02' }, 'Rilievo 02', 'closed'), false);
 assert.equal(canDownloadProject('Rilievo 02'), true);
 assert.equal(canDownloadProject(''), false);
 const shapes = parseDxf('0\nLINE\n10\n0\n20\n0\n11\n20\n21\n10\n0\nEOF\n');
@@ -49,6 +52,6 @@ assert.equal(photoExtension('image/png'), 'png');
 assert.equal(HELP_STEPS.length, 4);
 assert.deepEqual(HELP_STEPS[2].details, [
   'Seleziona prima l’area di intervento.',
-  'Il QR è vincolato alla coppia progetto-area.',
+  'Il QR è vincolato al progetto; puoi cambiare area senza scollegare la camera.',
   'Il cellulare potrà riagganciarsi fino alla scadenza.'
 ]);
