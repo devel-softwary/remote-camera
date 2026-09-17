@@ -44,7 +44,6 @@ const cancelMappedAreaBtn = document.querySelector('#cancelMappedArea');
 const zoomInCadBtn = document.querySelector('#zoomInCad');
 const zoomOutCadBtn = document.querySelector('#zoomOutCad');
 const resetCadViewBtn = document.querySelector('#resetCadView');
-const startPhotoSessionBtn = document.querySelector('#startPhotoSession');
 const photoPointState = document.querySelector('#photoPointState');
 const areaSelect = document.querySelector('#areaSelect');
 const newAreaBtn = document.querySelector('#newArea');
@@ -139,7 +138,6 @@ function renderAreas() {
   areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Area “${selectedArea.name}” chiusa. Riaprila per aggiungere foto.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.'));
   captureBtn.disabled = !(area && session?.project === project && session.area === area.name && dc?.readyState === 'open');
   newSessionBtn.disabled = !(projectSelected && area);
-  startPhotoSessionBtn.disabled = true;
   photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
   renderGallery();
   renderCad();
@@ -224,7 +222,6 @@ function renderCad() {
   svg.addEventListener('pointerup', () => { cadPan = null; renderCad(); });
   cadCanvas.replaceChildren(svg);
   photoPointState.textContent = drawingArea ? `Area in disegno: ${pendingAreaVertices.length} punti. Aggiungi almeno 3 punti, poi conferma.` : (selectedPhotoPointId ? `Punto selezionato: ${projectPoints().find(point => point.id === selectedPhotoPointId)?.label}.` : 'Seleziona un’area o disegnane una nuova.');
-  startPhotoSessionBtn.disabled = !currentArea();
 }
 
 function handleCadPan(event) {
@@ -660,10 +657,6 @@ addPhotoPointBtn.addEventListener('click', () => { addingPhotoPoint = !addingPho
 zoomInCadBtn.addEventListener('click', () => changeCadZoom(.75));
 zoomOutCadBtn.addEventListener('click', () => changeCadZoom(1.25));
 resetCadViewBtn.addEventListener('click', () => { cadView = cadBounds && { ...cadBounds }; if (cadDrawingByProject[projectSelect.value]) cadDrawingByProject[projectSelect.value].view = cadView; renderCad(); });
-startPhotoSessionBtn.addEventListener('click', async () => {
-  // La sessione viene avviata dalla colonna di destra prima della creazione delle aree.
-});
-
 renderHelp();
 loadWorkspace();
 config = await loadConfig();
