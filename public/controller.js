@@ -5,6 +5,7 @@ import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
 import { createThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
+import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -57,6 +58,15 @@ const helpButton = document.querySelector('#helpButton');
 const helpDialog = document.querySelector('#helpDialog');
 const closeHelpBtn = document.querySelector('#closeHelp');
 const helpSteps = document.querySelector('#helpSteps');
+const photoViewerDialog = document.querySelector('#photoViewerDialog');
+const closePhotoViewerBtn = document.querySelector('#closePhotoViewer');
+const photoViewerViewport = document.querySelector('#photoViewerViewport');
+const photoViewerImage = document.querySelector('#photoViewerImage');
+const photoZoom = document.querySelector('#photoZoom');
+const photoZoomValue = document.querySelector('#photoZoomValue');
+const zoomOutPhotoBtn = document.querySelector('#zoomOutPhoto');
+const zoomInPhotoBtn = document.querySelector('#zoomInPhoto');
+const actualSizePhotoBtn = document.querySelector('#actualSizePhoto');
 
 let config, session, ws, pc, dc;
 let pendingIceCandidates = [];
@@ -77,6 +87,7 @@ let drawingArea = false;
 let pendingAreaVertices = [];
 let selectedPhotoPointId = null;
 let cadPan = null;
+let currentPhotoZoomRange = { min: 1, max: 1 };
 
 function renderHelp() {
   for (const step of HELP_STEPS) {
@@ -461,8 +472,10 @@ function renderGallery() {
       const img = document.createElement('img'); img.src = photo.url; img.alt = `Foto ${area.name}`;
       showStoredThumbnail(img, photo);
       const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
+      const actions = document.createElement('div'); actions.className = 'gallery-actions';
+      const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary'; view.textContent = '👁 Visualizza'; view.setAttribute('aria-label', `Visualizza foto ${area.name}`); view.addEventListener('click', () => openPhotoViewer(photo, area.name));
       const link = document.createElement('a'); link.href = photo.url; link.download = ''; link.textContent = 'Scarica originale';
-      figure.append(img, meta, link); items.append(figure);
+      actions.append(view, link); figure.append(img, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
   }
@@ -478,6 +491,33 @@ function showStoredThumbnail(img, photo) {
   }).catch(() => {});
 }
 
+function setPhotoZoom(value) {
+  const zoomValue = clampPhotoZoom(value, currentPhotoZoomRange);
+  photoZoom.value = String(zoomValue);
+  photoZoomValue.value = `${Math.round(zoomValue * 100)}%`;
+  photoZoomValue.textContent = photoZoomValue.value;
+  photoViewerImage.style.width = `${Math.round(photoViewerImage.naturalWidth * zoomValue)}px`;
+  photoViewerImage.style.height = `${Math.round(photoViewerImage.naturalHeight * zoomValue)}px`;
+}
+
+function fitPhotoViewer() {
+  currentPhotoZoomRange = photoZoomRange(photoViewerImage.naturalWidth, photoViewerImage.naturalHeight, photoViewerViewport.clientWidth, photoViewerViewport.clientHeight);
+  photoZoom.min = String(currentPhotoZoomRange.min);
+  photoZoom.max = String(currentPhotoZoomRange.max);
+  photoZoom.disabled = currentPhotoZoomRange.min === currentPhotoZoomRange.max;
+  zoomOutPhotoBtn.disabled = photoZoom.disabled;
+  zoomInPhotoBtn.disabled = photoZoom.disabled;
+  actualSizePhotoBtn.disabled = photoZoom.disabled;
+  setPhotoZoom(currentPhotoZoomRange.min);
+}
+
+function openPhotoViewer(photo, areaName) {
+  photoViewerImage.alt = `Foto ${areaName}`;
+  photoViewerImage.onload = fitPhotoViewer;
+  photoViewerDialog.showModal();
+  photoViewerImage.src = photo.url;
+}
+
 captureBtn.addEventListener('click', () => {
   if (!canCaptureArea(currentArea(), session, projectSelect.value, dc?.readyState)) return;
   captureBtn.disabled = true;
@@ -491,6 +531,19 @@ closeHelpBtn.addEventListener('click', () => helpDialog.close());
 helpDialog.addEventListener('click', event => {
   if (event.target === helpDialog) helpDialog.close();
 });
+
+closePhotoViewerBtn.addEventListener('click', () => photoViewerDialog.close());
+photoViewerDialog.addEventListener('click', event => {
+  if (event.target === photoViewerDialog) photoViewerDialog.close();
+});
+photoViewerDialog.addEventListener('close', () => {
+  photoViewerImage.removeAttribute('src');
+  photoViewerImage.onload = null;
+});
+photoZoom.addEventListener('input', () => setPhotoZoom(photoZoom.value));
+zoomOutPhotoBtn.addEventListener('click', () => setPhotoZoom(Number(photoZoom.value) - .1));
+zoomInPhotoBtn.addEventListener('click', () => setPhotoZoom(Number(photoZoom.value) + .1));
+actualSizePhotoBtn.addEventListener('click', () => setPhotoZoom(1));
 
 let zoomTimer;
 zoom.addEventListener('input', () => {

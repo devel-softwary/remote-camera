@@ -45,4 +45,7 @@
 <dialog id="helpDialog" class="help-dialog" aria-labelledby="helpTitle">
   <div class="help-dialog-content"><div class="section-heading"><h2 id="helpTitle">Guida rapida</h2><button id="closeHelp" class="icon-button secondary" type="button" aria-label="Chiudi guida">×</button></div><p>Segui questi passi per effettuare un rilievo.</p><ol id="helpSteps" class="help-steps"></ol></div>
 </dialog>
+<dialog id="photoViewerDialog" class="photo-viewer-dialog" aria-labelledby="photoViewerTitle">
+  <div class="photo-viewer-content"><div class="section-heading"><h2 id="photoViewerTitle">Visualizza foto</h2><button id="closePhotoViewer" class="icon-button secondary" type="button" aria-label="Chiudi foto">×</button></div><div id="photoViewerViewport" class="photo-viewer-viewport"><img id="photoViewerImage" alt="Foto a dimensione originale"></div><div class="photo-viewer-controls"><button id="zoomOutPhoto" class="secondary icon-button" type="button" aria-label="Riduci foto">−</button><label class="sr-only" for="photoZoom">Zoom foto</label><input id="photoZoom" type="range" step="0.01" aria-label="Zoom foto"><output id="photoZoomValue" for="photoZoom">100%</output><button id="zoomInPhoto" class="secondary icon-button" type="button" aria-label="Ingrandisci foto">＋</button><button id="actualSizePhoto" class="secondary" type="button">Dimensioni reali</button></div></div>
+</dialog>
 <script type="module" src="/controller.js"></script></body></html>
