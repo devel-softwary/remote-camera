@@ -474,7 +474,10 @@ function renderGallery() {
       const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const actions = document.createElement('div'); actions.className = 'gallery-actions';
       const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary'; view.textContent = '👁 Visualizza'; view.setAttribute('aria-label', `Visualizza foto ${area.name}`); view.addEventListener('click', () => openPhotoViewer(photo, area.name));
-      const link = document.createElement('a'); link.className = 'gallery-action-link'; link.href = photo.url; link.download = ''; link.textContent = '⬇ Scarica'; link.setAttribute('aria-label', `Scarica foto ${area.name}`);
+      const link = document.createElement('a'); link.className = 'gallery-action-link'; link.href = photo.url; link.download = ''; link.setAttribute('aria-label', `Scarica foto ${area.name}`);
+      const downloadIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); downloadIcon.setAttribute('viewBox', '0 0 24 24'); downloadIcon.setAttribute('aria-hidden', 'true'); downloadIcon.setAttribute('focusable', 'false');
+      const downloadPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); downloadPath.setAttribute('d', 'M12 3v11m0 0 4-4m-4 4-4-4m-3 7v3h14v-3'); downloadIcon.append(downloadPath);
+      link.append(downloadIcon, 'Scarica');
       actions.append(view, link); figure.append(img, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
