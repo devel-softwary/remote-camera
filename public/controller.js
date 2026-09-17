@@ -474,7 +474,7 @@ function renderGallery() {
       const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const actions = document.createElement('div'); actions.className = 'gallery-actions';
       const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary'; view.textContent = '👁 Visualizza'; view.setAttribute('aria-label', `Visualizza foto ${area.name}`); view.addEventListener('click', () => openPhotoViewer(photo, area.name));
-      const link = document.createElement('a'); link.href = photo.url; link.download = ''; link.textContent = '⬇ Scarica'; link.setAttribute('aria-label', `Scarica foto ${area.name}`);
+      const link = document.createElement('a'); link.className = 'gallery-action-link'; link.href = photo.url; link.download = ''; link.textContent = '⬇ Scarica'; link.setAttribute('aria-label', `Scarica foto ${area.name}`);
       actions.append(view, link); figure.append(img, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);

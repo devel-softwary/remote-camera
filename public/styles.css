@@ -29,7 +29,8 @@ video { width:100%; background:#000; border-radius:16px; aspect-ratio:9/16; obje
 .gallery img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px; display:block; }
 .gallery a { color:#b7c8ff; font-size:.85rem; }
 .gallery-actions { display:flex; gap:8px; margin-top:7px; }
-.gallery-actions button { min-height:34px; padding:0 10px; font-size:.85rem; }
+.gallery-actions button, .gallery-action-link { min-height:34px; padding:0 10px; font-size:.85rem; }
+.gallery-actions .gallery-action-link { display:inline-flex; align-items:center; min-height:34px; margin-top:0; padding:0 10px; border:1px solid #36425f; border-radius:12px; color:white; background:#1a2238; cursor:pointer; font:inherit; font-size:.85rem; font-weight:700; text-decoration:none; }
 .notice { color:#ffcf70; }
 .small { font-size:.85rem; }
 .hidden { display:none !important; }
