@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { cadValidationError, canDownloadProject, canManageAreas, createInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
+import { cadValidationError, canCreateMappedArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -38,6 +38,9 @@ const dwgState = document.querySelector('#dwgState');
 const tokenModeInfo = document.querySelector('#tokenModeInfo');
 const cadCanvas = document.querySelector('#cadCanvas');
 const addPhotoPointBtn = document.querySelector('#addPhotoPoint');
+const newMappedAreaBtn = document.querySelector('#newMappedArea');
+const completeMappedAreaBtn = document.querySelector('#completeMappedArea');
+const cancelMappedAreaBtn = document.querySelector('#cancelMappedArea');
 const zoomInCadBtn = document.querySelector('#zoomInCad');
 const zoomOutCadBtn = document.querySelector('#zoomOutCad');
 const resetCadViewBtn = document.querySelector('#resetCadView');
@@ -71,6 +74,8 @@ let cadBounds = null;
 let cadView = null;
 const cadDrawingByProject = {};
 let addingPhotoPoint = false;
+let drawingArea = false;
+let pendingAreaVertices = [];
 let selectedPhotoPointId = null;
 let cadPan = null;
 
@@ -137,6 +142,7 @@ function renderAreas() {
   startPhotoSessionBtn.disabled = true;
   photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
   renderGallery();
+  renderCad();
 }
 
 function currentSelectedArea() { return (areasByProject[projectSelect.value] || []).find(area => area.id === areaSelect.value) || null; }
@@ -157,6 +163,9 @@ function updateProjectUi() {
   uploadCadBtn.disabled = !projectSelected;
   deleteCadBtn.disabled = !cad;
   addPhotoPointBtn.disabled = !cadShapes.length;
+  newMappedAreaBtn.disabled = !cadShapes.length || !projectSelected;
+  completeMappedAreaBtn.disabled = !drawingArea || !canCreateMappedArea(pendingAreaVertices);
+  cancelMappedAreaBtn.disabled = !drawingArea;
   [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !cadShapes.length);
   areaSection.setAttribute('aria-disabled', String(!projectSelected));
   [sessionSection, cameraQrSection].forEach(section => section.setAttribute('aria-disabled', String(!projectSelected)));
@@ -168,6 +177,7 @@ function updateProjectUi() {
 }
 
 function projectPoints() { return photoPointsByProject[projectSelect.value] || []; }
+function projectAreas() { return areasByProject[projectSelect.value] || []; }
 
 function renderCad() {
   if (!cadShapes.length || !cadBounds) {
@@ -186,6 +196,25 @@ function renderCad() {
     node.setAttribute('class', 'cad-shape');
     svg.append(node);
   }
+  for (const area of projectAreas()) {
+    if (!area.vertices?.length) continue;
+    const polygon = document.createElementNS(svg.namespaceURI, 'polygon');
+    polygon.setAttribute('points', area.vertices.map(point => `${point.x},${-point.y}`).join(' '));
+    polygon.setAttribute('class', `cad-area${area.id === areaSelect.value ? ' selected' : ''}${area.status === 'closed' ? ' closed' : ''}`);
+    polygon.dataset.areaId = area.id;
+    svg.append(polygon);
+    const labelPoint = area.vertices[0];
+    const label = document.createElementNS(svg.namespaceURI, 'text');
+    label.setAttribute('x', labelPoint.x); label.setAttribute('y', -labelPoint.y); label.setAttribute('class', 'cad-area-label'); label.dataset.areaId = area.id; label.textContent = area.name; svg.append(label);
+  }
+  if (pendingAreaVertices.length) {
+    const preview = document.createElementNS(svg.namespaceURI, pendingAreaVertices.length > 2 ? 'polygon' : 'polyline');
+    preview.setAttribute('points', pendingAreaVertices.map(point => `${point.x},${-point.y}`).join(' '));
+    preview.setAttribute('class', 'cad-area-preview'); svg.append(preview);
+    for (const point of pendingAreaVertices) {
+      const vertex = document.createElementNS(svg.namespaceURI, 'circle'); vertex.setAttribute('cx', point.x); vertex.setAttribute('cy', -point.y); vertex.setAttribute('r', Math.max(box.width, box.height) * .007); vertex.setAttribute('class', 'cad-area-vertex'); svg.append(vertex);
+    }
+  }
   for (const point of projectPoints()) {
     const marker = document.createElementNS(svg.namespaceURI, 'circle'); marker.setAttribute('cx', point.x); marker.setAttribute('cy', -point.y); marker.setAttribute('r', Math.max(box.width, box.height) * .012); marker.setAttribute('class', `photo-marker${point.id === selectedPhotoPointId ? ' selected' : ''}`); marker.dataset.pointId = point.id; svg.append(marker);
   }
@@ -194,7 +223,7 @@ function renderCad() {
   svg.addEventListener('pointermove', handleCadPan);
   svg.addEventListener('pointerup', () => { cadPan = null; renderCad(); });
   cadCanvas.replaceChildren(svg);
-  photoPointState.textContent = selectedPhotoPointId ? `Punto selezionato: ${projectPoints().find(point => point.id === selectedPhotoPointId)?.label}.` : 'Seleziona un punto foto per creare una sessione dedicata.';
+  photoPointState.textContent = drawingArea ? `Area in disegno: ${pendingAreaVertices.length} punti. Aggiungi almeno 3 punti, poi conferma.` : (selectedPhotoPointId ? `Punto selezionato: ${projectPoints().find(point => point.id === selectedPhotoPointId)?.label}.` : 'Seleziona un’area o disegnane una nuova.');
   startPhotoSessionBtn.disabled = !currentArea();
 }
 
@@ -208,11 +237,14 @@ function handleCadPan(event) {
 }
 
 function handleCadClick(event) {
+  const areaNode = event.target.closest('[data-area-id]');
+  if (areaNode && !drawingArea) { areaSelect.value = areaNode.dataset.areaId; renderAreas(); return; }
   const marker = event.target.closest('.photo-marker');
   if (marker) { selectedPhotoPointId = marker.dataset.pointId; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); renderCad(); return; }
-  if (!addingPhotoPoint) return;
   const svg = event.currentTarget; const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
   const xy = point.matrixTransform(svg.getScreenCTM().inverse());
+  if (drawingArea) { pendingAreaVertices.push({ x: xy.x, y: -xy.y }); renderCad(); return; }
+  if (!addingPhotoPoint) return;
   const project = projectSelect.value;
   const photoPoint = createPhotoPoint(projectPoints(), xy.x, -xy.y);
   (photoPointsByProject[project] ||= []).push(photoPoint); selectedPhotoPointId = photoPoint.id; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); saveWorkspace(); renderCad();
@@ -611,7 +643,20 @@ deleteCadBtn.addEventListener('click', () => {
   updateProjectUi();
 });
 
-addPhotoPointBtn.addEventListener('click', () => { addingPhotoPoint = !addingPhotoPoint; addPhotoPointBtn.classList.toggle('active', addingPhotoPoint); photoPointState.textContent = addingPhotoPoint ? 'Clicca sul disegno per posizionare il punto foto.' : 'Seleziona un punto foto per creare una sessione dedicata.'; });
+newMappedAreaBtn.addEventListener('click', () => {
+  drawingArea = true; pendingAreaVertices = []; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); renderCad();
+});
+completeMappedAreaBtn.addEventListener('click', () => {
+  if (!canCreateMappedArea(pendingAreaVertices)) return;
+  const project = projectSelect.value; const areas = projectAreas();
+  const name = nextAreaName(areas, window.prompt('Nome dell’area:', '') || '');
+  if (!name) return;
+  const area = createMappedInterventionArea(areas, name, pendingAreaVertices);
+  (areasByProject[project] ||= []).push(area);
+  areaSelect.value = area.id; drawingArea = false; pendingAreaVertices = []; saveWorkspace(); renderAreas(); renderCad(); publishActiveArea();
+});
+cancelMappedAreaBtn.addEventListener('click', () => { drawingArea = false; pendingAreaVertices = []; renderCad(); });
+addPhotoPointBtn.addEventListener('click', () => { addingPhotoPoint = !addingPhotoPoint; drawingArea = false; pendingAreaVertices = []; addPhotoPointBtn.classList.toggle('active', addingPhotoPoint); renderCad(); });
 zoomInCadBtn.addEventListener('click', () => changeCadZoom(.75));
 zoomOutCadBtn.addEventListener('click', () => changeCadZoom(1.25));
 resetCadViewBtn.addEventListener('click', () => { cadView = cadBounds && { ...cadBounds }; if (cadDrawingByProject[projectSelect.value]) cadDrawingByProject[projectSelect.value].view = cadView; renderCad(); });

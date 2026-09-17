@@ -80,9 +80,17 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .dwg-placeholder { min-height:170px; display:grid; place-content:center; text-align:center; border:1px dashed #3b4a6d; border-radius:14px; color:#8493b5; background:#0c1221; }
 .cad-toolbar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
 .cad-toolbar button { min-height:38px; padding:0 11px; }
+.cad-toolbar-spacer { flex:1; }
+.cad-instructions { margin:0 0 12px; font-size:.88rem; }
 #cadCanvas { display:block; height:420px; overflow:hidden; padding:0; }
 .cad-svg { width:100%; height:100%; background:#0b1020; cursor:crosshair; }
 .cad-shape { fill:none; stroke:#9eb7ff; stroke-width:1; vector-effect:non-scaling-stroke; }
+.cad-area { fill:#3157e740; stroke:#7694ff; stroke-width:2; vector-effect:non-scaling-stroke; cursor:pointer; }
+.cad-area.selected { fill:#ffb02045; stroke:#ffcf70; stroke-width:3; }
+.cad-area.closed { fill:#7b849933; stroke:#8f9ab6; stroke-dasharray:6 4; }
+.cad-area-label { fill:#fff; stroke:#10182b; stroke-width:3px; paint-order:stroke; font:700 14px Inter,system-ui,sans-serif; pointer-events:none; }
+.cad-area-preview { fill:#3ed59830; stroke:#3ed598; stroke-width:2; stroke-dasharray:7 4; vector-effect:non-scaling-stroke; }
+.cad-area-vertex { fill:#3ed598; stroke:#fff; stroke-width:1; vector-effect:non-scaling-stroke; }
 .photo-marker { fill:#ffb020; stroke:#fff4d6; stroke-width:1; vector-effect:non-scaling-stroke; cursor:pointer; }
 .photo-marker.selected { fill:#3157e7; stroke-width:2; }
 .dwg-placeholder span { font-size:3rem; line-height:1; }

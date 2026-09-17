@@ -33,9 +33,10 @@
         <p id="capabilities" class="small">In attesa delle capacità della camera.</p>
         <div class="capture-bar"><button id="capture" class="capture" disabled>📷 Scatta foto full-resolution</button><span id="captureState" class="small">In attesa del telefono.</span></div>
       </section>
-      <section class="card dwg-card"><div class="section-heading"><h2>DWG area</h2><span id="dwgState" class="small">Carica un file DWG o DXF per iniziare.</span></div>
-        <div class="cad-toolbar"><button id="addPhotoPoint" class="secondary" type="button" disabled>Aggiungi punto foto</button><button id="zoomInCad" class="secondary" type="button" disabled aria-label="Ingrandisci disegno">＋</button><button id="zoomOutCad" class="secondary" type="button" disabled aria-label="Riduci disegno">−</button><button id="resetCadView" class="secondary" type="button" disabled>Centra</button><button id="startPhotoSession" type="button" disabled>Avvia sessione area</button></div>
-        <p id="photoPointState" class="small">Apri un'area di intervento per avviare una sessione di rilevazione.</p><div id="cadCanvas" class="dwg-placeholder" aria-live="polite"><span>▧</span><p>Area disegno CAD</p></div>
+      <section class="card dwg-card"><div class="section-heading"><h2>Planimetria CAD</h2><span id="dwgState" class="small">Carica un file DWG o DXF per iniziare.</span></div>
+        <p class="cad-instructions">Disegna direttamente sulla planimetria: seleziona “Nuova area”, poi tocca almeno tre punti e conferma.</p>
+        <div class="cad-toolbar"><button id="newMappedArea" type="button" disabled>＋ Nuova area</button><button id="completeMappedArea" class="secondary" type="button" disabled>Conferma area</button><button id="cancelMappedArea" class="secondary" type="button" disabled>Annulla</button><button id="addPhotoPoint" class="secondary" type="button" disabled>Aggiungi punto foto</button><span class="cad-toolbar-spacer"></span><button id="zoomOutCad" class="secondary" type="button" disabled aria-label="Riduci disegno">−</button><button id="zoomInCad" class="secondary" type="button" disabled aria-label="Ingrandisci disegno">＋</button><button id="resetCadView" class="secondary" type="button" disabled>Adatta</button></div>
+        <p id="photoPointState" class="small">Crea o seleziona un’area sulla planimetria.</p><div id="cadCanvas" class="dwg-placeholder" aria-live="polite"><span>▧</span><p>Area disegno CAD</p></div>
       </section>
       <section class="card"><h2>Elenco foto</h2><div id="gallery" class="gallery"><p class="small">Nessuna foto.</p></div></section>
     </div>

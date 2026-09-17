@@ -43,6 +43,21 @@ export function createInterventionArea(areas, name) {
   return { id: crypto.randomUUID(), name, status: 'open', photos: [] };
 }
 
+export function createMappedInterventionArea(areas, name, vertices) {
+  return { ...createInterventionArea(areas, name), vertices: normalizeAreaVertices(vertices) };
+}
+
+export function normalizeAreaVertices(vertices) {
+  if (!Array.isArray(vertices)) return [];
+  return vertices
+    .filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y))
+    .map(point => ({ x: point.x, y: point.y }));
+}
+
+export function canCreateMappedArea(vertices) {
+  return normalizeAreaVertices(vertices).length >= 3;
+}
+
 export function reopenInterventionArea(area) {
   if (!area || area.status !== 'closed') return false;
   area.status = 'open';
