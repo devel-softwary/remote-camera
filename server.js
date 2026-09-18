@@ -73,7 +73,13 @@ app.post('/api/workspace/sync', (req, res) => {
   try {
     const workspace = mergeWorkspaces(readWorkspace(workspaceFile), req.body);
     res.json(writeWorkspace(workspaceFile, workspace));
-  } catch { res.status(500).json({ message: 'Impossibile sincronizzare l’archivio dei progetti.' }); }
+  } catch (error) {
+    console.error('Workspace sync failed:', error);
+    const message = error?.code === 'EACCES' || error?.code === 'EROFS'
+      ? 'Archivio server non scrivibile. Verifica i permessi della cartella data.'
+      : 'Impossibile sincronizzare l’archivio dei progetti.';
+    res.status(500).json({ message });
+  }
 });
 
 app.post('/api/session', (req, res) => {
