@@ -6,6 +6,7 @@ import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
 import { createThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
+import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -72,6 +73,9 @@ let config, session, ws, pc, dc;
 let pendingIceCandidates = [];
 let captureSeq = 0;
 let pendingPhoto = null;
+let captureRequestId = null;
+let captureTimeout = null;
+let photoUploadAbortController = null;
 let torchOn = false;
 let cameraInfo = null;
 let projects = [];
@@ -147,11 +151,41 @@ function renderAreas() {
   reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
   areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Area “${selectedArea.name}” chiusa. Riaprila per aggiungere foto.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.'));
-  captureBtn.disabled = !canCaptureArea(area, session, project, dc?.readyState);
+  updateCaptureButton();
   newSessionBtn.disabled = !(projectSelected && area);
   photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
   renderGallery();
   renderCad();
+}
+
+function canCapture() {
+  return canCaptureArea(currentArea(), session, projectSelect.value, dc?.readyState);
+}
+
+function updateCaptureButton() {
+  captureBtn.disabled = !canStartCapture(canCapture(), captureRequestId);
+}
+
+function clearCaptureRequest() {
+  if (captureTimeout) clearTimeout(captureTimeout);
+  captureTimeout = null;
+  captureRequestId = null;
+  photoUploadAbortController = null;
+  updateCaptureButton();
+}
+
+function expireCaptureRequest() {
+  if (!captureRequestId) return;
+  pendingPhoto = null;
+  photoUploadAbortController?.abort();
+  captureState.textContent = 'Tempo scaduto durante il salvataggio. Riprova lo scatto.';
+  clearCaptureRequest();
+}
+
+function startCaptureRequest(requestId) {
+  captureRequestId = requestId;
+  captureTimeout = setTimeout(expireCaptureRequest, CAPTURE_TIMEOUT_MS);
+  updateCaptureButton();
 }
 
 function currentSelectedArea() { return (areasByProject[projectSelect.value] || []).find(area => area.id === areaSelect.value) || null; }
@@ -310,7 +344,7 @@ function createPeer() {
     dc = e.channel;
     dc.binaryType = 'arraybuffer';
     dc.onopen = () => {
-      captureBtn.disabled = !canCaptureArea(currentArea(), session, projectSelect.value, dc?.readyState);
+      updateCaptureButton();
       connectionInfo.textContent = 'Video + canale dati collegati.';
       sendData({ type: 'get-camera-info' });
     };
@@ -395,8 +429,9 @@ function handleDataChannel(e) {
       connectionInfo.textContent = `Camera attiva: ${msg.label || 'Camera'}`;
     }
     else if (msg.type === 'photo-start') {
+      if (!isCurrentCapture(captureRequestId, msg.requestId)) return;
       const area = currentSessionArea();
-      if (!area) { captureState.textContent = 'Seleziona un’area prima di scattare.'; return; }
+      if (!area) { captureState.textContent = 'Seleziona un’area prima di scattare.'; clearCaptureRequest(); return; }
       pendingPhoto = { meta: msg, area, chunks: [], received: 0 };
       captureState.textContent = `Ricezione foto ${formatBytes(msg.size)}…`;
     } else if (msg.type === 'photo-end') {
@@ -407,8 +442,10 @@ function handleDataChannel(e) {
         if (cameraInfo) renderCameraInfo(cameraInfo);
         return;
       }
+      if (!isCurrentCapture(captureRequestId, msg.requestId)) return;
       captureState.textContent = `Errore: ${msg.message}`;
-      captureBtn.disabled = false;
+      pendingPhoto = null;
+      clearCaptureRequest();
     }
     return;
   }
@@ -425,16 +462,19 @@ function finishPhoto() {
   pendingPhoto = null;
   const blob = new Blob(p.chunks, { type: p.meta.mime || 'image/jpeg' });
   savePhoto(blob, p.meta, p.area).catch(err => {
+    if (!isCurrentCapture(captureRequestId, p.meta.requestId)) return;
     captureState.textContent = `Errore archivio: ${err.message}`;
-    captureBtn.disabled = false;
+    clearCaptureRequest();
   });
 }
 
 async function savePhoto(blob, meta, selectedArea) {
   if (!selectedArea || selectedArea.status !== 'open') throw new Error('L’area di intervento non è più aperta.');
-  const response = await fetch('/api/photos', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name }, body: blob });
+  photoUploadAbortController = new AbortController();
+  const response = await fetch('/api/photos', { method: 'POST', signal: photoUploadAbortController.signal, headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name }, body: blob });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Salvataggio non riuscito');
   const saved = await response.json();
+  if (!isCurrentCapture(captureRequestId, meta.requestId)) return;
   const area = (areasByProject[session.project] || []).find(item => item.id === selectedArea.id);
   if (!area) throw new Error('Area non disponibile');
   const photoId = crypto.randomUUID();
@@ -447,7 +487,7 @@ async function savePhoto(blob, meta, selectedArea) {
   renderGallery();
   sendSignal({ type: 'photo-saved', photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
   captureState.textContent = `Foto archiviata in “${area.name}”: ${formatBytes(blob.size)}.`;
-  captureBtn.disabled = false;
+  clearCaptureRequest();
 }
 
 function publishActiveArea() {
@@ -522,9 +562,9 @@ function openPhotoViewer(photo, areaName) {
 }
 
 captureBtn.addEventListener('click', () => {
-  if (!canCaptureArea(currentArea(), session, projectSelect.value, dc?.readyState)) return;
-  captureBtn.disabled = true;
+  if (!canStartCapture(canCapture(), captureRequestId)) return;
   const requestId = `${Date.now()}-${++captureSeq}`;
+  startCaptureRequest(requestId);
   captureState.textContent = 'Scatto full-resolution in corso…';
   sendData({ type: 'capture', requestId });
 });
