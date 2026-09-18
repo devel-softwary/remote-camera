@@ -29,6 +29,7 @@ const capabilitiesEl = document.querySelector('#capabilities');
 const expiryEl = document.querySelector('#expiry');
 const projectSelect = document.querySelector('#projectSelect');
 const newProjectBtn = document.querySelector('#newProject');
+const syncWorkspaceBtn = document.querySelector('#syncWorkspace');
 const renameProjectBtn = document.querySelector('#renameProject');
 const downloadProjectBtn = document.querySelector('#downloadProject');
 const deleteProjectBtn = document.querySelector('#deleteProject');
@@ -126,6 +127,33 @@ function saveWorkspace() {
   localStorage.setItem('remote-camera-cad', JSON.stringify(cadByProject));
   localStorage.setItem('remote-camera-photo-points', JSON.stringify(photoPointsByProject));
   localStorage.setItem('remote-camera-areas', JSON.stringify(areasByProject));
+}
+
+function workspacePayload() { return { projects, areasByProject }; }
+
+async function syncWorkspace() {
+  const selectedProject = projectSelect.value;
+  syncWorkspaceBtn.disabled = true;
+  const label = syncWorkspaceBtn.textContent;
+  syncWorkspaceBtn.textContent = 'Sincronizzazione…';
+  try {
+    const response = await fetch('/api/workspace/sync', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(workspacePayload())
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Sincronizzazione non riuscita.');
+    const workspace = await response.json();
+    projects = workspace.projects;
+    areasByProject = workspace.areasByProject;
+    saveWorkspace();
+    renderProjects();
+    projectSelect.value = projects.includes(selectedProject) ? selectedProject : '';
+    updateProjectUi();
+    syncWorkspaceBtn.textContent = 'Sincronizzato';
+    setTimeout(() => { syncWorkspaceBtn.textContent = label; }, 1500);
+  } catch (error) {
+    window.alert(error.message);
+    syncWorkspaceBtn.textContent = label;
+  } finally { syncWorkspaceBtn.disabled = false; }
 }
 
 function renderProjects() {
@@ -689,6 +717,8 @@ newProjectBtn.addEventListener('click', () => {
   projectSelect.value = name;
   updateProjectUi();
 });
+
+syncWorkspaceBtn.addEventListener('click', syncWorkspace);
 
 renameProjectBtn.addEventListener('click', () => {
   const current = projectSelect.value;

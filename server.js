@@ -13,6 +13,7 @@ import { photoExtension, photoStorageDirectory, safeFolderName } from './storage
 import { canDownloadProject, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
+import { mergeWorkspaces, readWorkspace, writeWorkspace } from './workspace-storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -20,9 +21,10 @@ const port = Number(process.env.PORT || 3000);
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 10 * 60 * 1000);
 
 app.disable('x-powered-by');
-app.use(express.json({ limit: '32kb' }));
+app.use(express.json({ limit: '512kb' }));
 app.use(express.static(path.join(__dirname, 'public'), publicStaticOptions));
 const uploadsDir = photoStorageDirectory(process.env.PHOTO_STORAGE_DIR, path.join(__dirname, 'uploads'));
+const workspaceFile = path.resolve(process.env.WORKSPACE_STORAGE_FILE || path.join(__dirname, 'data', 'workspace.json'));
 app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: false, maxAge: '1h' }));
 
 const sessions = new Map();
@@ -60,6 +62,18 @@ app.get('/api/config', (req, res) => {
     });
   }
   res.json({ baseUrl: base.replace(/\/$/, ''), iceServers, sessionTtlMs: SESSION_TTL_MS });
+});
+
+app.get('/api/workspace', (_req, res) => {
+  try { res.json(readWorkspace(workspaceFile)); }
+  catch { res.status(500).json({ message: 'Impossibile leggere l’archivio dei progetti.' }); }
+});
+
+app.post('/api/workspace/sync', (req, res) => {
+  try {
+    const workspace = mergeWorkspaces(readWorkspace(workspaceFile), req.body);
+    res.json(writeWorkspace(workspaceFile, workspace));
+  } catch { res.status(500).json({ message: 'Impossibile sincronizzare l’archivio dei progetti.' }); }
 });
 
 app.post('/api/session', (req, res) => {
