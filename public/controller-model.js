@@ -101,3 +101,20 @@ export function nextPhotoPointName(points, requestedName) {
   if (!name) return '';
   return points.some(point => point.label?.toLocaleLowerCase() === name.toLocaleLowerCase()) ? '' : name;
 }
+
+export function linkPhotoPointsToAreas(points, areas) {
+  let changed = false;
+  for (const point of points) {
+    const label = String(point?.label || '').trim();
+    if (!label) continue;
+    let area = areas.find(item => item.id === point.areaId);
+    if (!area) area = areas.find(item => String(item.name || '').toLocaleLowerCase() === label.toLocaleLowerCase());
+    if (!area) {
+      area = createInterventionArea(areas, label);
+      areas.push(area);
+      changed = true;
+    }
+    if (point.areaId !== area.id) { point.areaId = area.id; changed = true; }
+  }
+  return changed;
+}

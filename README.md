@@ -12,7 +12,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - camera anteriore/posteriore
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
-- aree di intervento nominate, con foto archiviate in `uploads/<progetto>/<area>`
+- punti foto nominati, con scatti archiviati in `uploads/<progetto>/<punto-foto>`
 - layer immagine o CAD per posizionare i punti foto sulla planimetria
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
 - download ZIP dell'intero progetto dal controller, con struttura per area
@@ -84,10 +84,10 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 ## Flusso
 
 1. Apri `/controller.html` e crea un progetto.
-2. Crea e seleziona un'area di intervento.
+2. Carica un layer, crea i punti foto e seleziona quello da rilevare.
 3. Crea una sessione dalla colonna destra e scansiona il QR dallo smartphone.
 4. Premi **Avvia camera** e concedi il permesso.
-5. Scatta le foto: vengono archiviate nell'area attiva. Lo stesso QR può riconnettere il dispositivo fino alla scadenza.
+5. Scatta le foto: vengono archiviate nel punto foto attivo. Lo stesso QR può riconnettere il dispositivo fino alla scadenza.
 6. Per un'altra area, selezionala nel controller: la camera resta connessa e le foto finiscono nella rispettiva cartella.
 7. Con la sessione aperta, seleziona il progetto e premi **Scarica ZIP** per salvarne tutte le foto sul computer del browser.
 

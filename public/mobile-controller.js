@@ -57,7 +57,7 @@ async function connect() {
     const message = JSON.parse(event.data);
     if (message.type === 'error') { setStatus(statusEl, message.message, 'warn'); return; }
     if (message.type === 'joined') setStatus(statusEl, `Sessione ${message.room}`, 'ok');
-    else if (message.type === 'session-status') areaEl.textContent = message.activeArea ? `Area attiva: ${message.activeArea}` : 'Il laptop deve selezionare un’area.';
+    else if (message.type === 'session-status') areaEl.textContent = message.activeArea ? `Punto foto attivo: ${message.activeArea}` : 'Il laptop deve selezionare un punto foto.';
     else if (message.type === 'photo-saved') infoEl.textContent = message.area ? `Foto archiviata in “${message.area}”.` : 'Foto archiviata.';
     else if (message.type === 'command-result') { infoEl.textContent = message.ok ? (message.command === 'capture' ? 'Foto inviata al controller centrale.' : 'Comando completato.') : `Errore: ${message.message || 'comando non riuscito'}`; captureBtn.disabled = false; }
     else if (message.type === 'webrtc-offer') { await pc.setRemoteDescription(message.sdp); const answer = await pc.createAnswer(); await pc.setLocalDescription(answer); signal({ type: 'webrtc-answer', sdp: pc.localDescription }); }

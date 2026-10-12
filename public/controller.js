@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { canCaptureArea, canDownloadProject, canManageAreas, createInterventionArea, isProjectSelected, layerFileKind, layerValidationError, nextAreaName, nextPhotoPointName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
+import { canCaptureArea, canDownloadProject, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -50,7 +50,7 @@ const photoPointNameForm = document.querySelector('#photoPointNameForm');
 const photoPointName = document.querySelector('#photoPointName');
 const cancelPhotoPointBtn = document.querySelector('#cancelPhotoPoint');
 const areaSelect = document.querySelector('#areaSelect');
-const newAreaBtn = document.querySelector('#newArea');
+const photoPointList = document.querySelector('#photoPointList');
 const closeAreaBtn = document.querySelector('#closeArea');
 const reopenAreaBtn = document.querySelector('#reopenArea');
 const areaState = document.querySelector('#areaState');
@@ -122,6 +122,9 @@ function loadWorkspace() {
     areasByProject = JSON.parse(localStorage.getItem('remote-camera-areas') || '{}');
     if (!Array.isArray(projects) || typeof cadByProject !== 'object' || !cadByProject || typeof photoPointsByProject !== 'object' || !photoPointsByProject || typeof areasByProject !== 'object' || !areasByProject) throw new Error('Invalid workspace');
   } catch { projects = []; cadByProject = {}; photoPointsByProject = {}; areasByProject = {}; }
+  let migrated = false;
+  for (const project of projects) migrated = linkPhotoPointsToAreas(photoPointsByProject[project] || [], areasByProject[project] ||= []) || migrated;
+  if (migrated) saveWorkspace();
   renderProjects();
 }
 
@@ -170,21 +173,37 @@ function renderProjects() {
 function renderAreas() {
   const project = projectSelect.value;
   const projectSelected = isProjectSelected(project);
-  const areas = areasByProject[project] || [];
+  const areas = projectSelected ? (areasByProject[project] ||= []) : [];
+  const points = photoPointsByProject[project] || [];
+  if (linkPhotoPointsToAreas(points, areas)) saveWorkspace();
+  const pointAreas = points.map(point => areas.find(area => area.id === point.areaId)).filter(Boolean);
   const selected = areaSelect.value;
-  areaSelect.replaceChildren(new Option('Nessuna area', ''));
-  areas.forEach(area => areaSelect.add(new Option(`${area.name}${area.status === 'closed' ? ' · chiusa' : ''}`, area.id)));
-  areaSelect.value = areas.some(area => area.id === selected) ? selected : (openAreaForProject(areasByProject, project)?.id || areas[0]?.id || '');
-  areaSelect.disabled = !projectSelected;
-  newAreaBtn.disabled = !canManageAreas(project);
+  areaSelect.replaceChildren(new Option('Nessun punto foto', ''));
+  pointAreas.forEach(area => areaSelect.add(new Option(`${area.name}${area.status === 'closed' ? ' · chiuso' : ''}`, area.id)));
+  areaSelect.value = pointAreas.some(area => area.id === selected) ? selected : (pointAreas.find(area => area.status === 'open')?.id || pointAreas[0]?.id || '');
+  areaSelect.disabled = !projectSelected || !points.length;
+  photoPointList.replaceChildren();
+  if (!points.length) {
+    const empty = document.createElement('p'); empty.className = 'small'; empty.textContent = projectSelected ? 'Nessun punto foto creato sul layer.' : 'Seleziona prima un progetto.'; photoPointList.append(empty);
+  } else {
+    for (const point of points) {
+      const area = areas.find(item => item.id === point.areaId);
+      const button = document.createElement('button'); button.type = 'button'; button.className = `secondary photo-point-list-item${area?.id === areaSelect.value ? ' active' : ''}`; button.dataset.areaId = area?.id || ''; button.setAttribute('aria-pressed', String(area?.id === areaSelect.value));
+      const name = document.createElement('span'); name.textContent = point.label;
+      const status = document.createElement('span'); status.className = 'photo-point-list-status'; status.textContent = area?.status === 'closed' ? 'Chiuso' : `${area?.photos?.length || 0} foto`;
+      button.append(name, status);
+      button.addEventListener('click', () => { areaSelect.value = area.id; selectedPhotoPointId = point.id; renderAreas(); publishActiveArea(); });
+      photoPointList.append(button);
+    }
+  }
   const selectedArea = currentSelectedArea();
   closeAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'open';
   reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
-  areaState.textContent = area ? `Area selezionata: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Area “${selectedArea.name}” chiusa. Riaprila per aggiungere foto.` : (projectSelected ? 'Crea o seleziona un’area di intervento.' : 'Crea o seleziona prima un progetto.'));
+  areaState.textContent = area ? `Punto selezionato: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Punto “${selectedArea.name}” chiuso. Riaprilo per aggiungere foto.` : (projectSelected ? 'Crea un punto foto sul layer.' : 'Seleziona prima un progetto.'));
   updateCaptureButton();
   newSessionBtn.disabled = !(projectSelected && area);
-  photoPointState.textContent = area ? `Area selezionata: ${area.name}. Gli scatti successivi saranno associati a questa area.` : 'Crea o seleziona un’area di intervento.';
+  photoPointState.textContent = area ? `Punto selezionato: ${area.name}. Gli scatti successivi saranno associati a questo punto.` : 'Crea o seleziona un punto foto.';
   renderGallery();
   renderCad();
 }
@@ -251,13 +270,11 @@ function updateProjectUi() {
 }
 
 function projectPoints() { return photoPointsByProject[projectSelect.value] || []; }
-function projectAreas() { return areasByProject[projectSelect.value] || []; }
-
 function renderCad() {
   const pendingPoint = pendingPhotoPoint?.project === projectSelect.value ? pendingPhotoPoint : null;
   photoPointNameForm.hidden = !pendingPoint;
   if ((!cadShapes.length && !layerImageUrl) || !cadBounds) {
-    cadCanvas.innerHTML = '<span>▧</span><p>Area disegno layer</p>';
+    cadCanvas.innerHTML = '<span>▧</span><p>Layer punti foto</p>';
     return;
   }
   const box = cadView || cadBounds;
@@ -321,7 +338,12 @@ function handleCadPan(event) {
 function handleCadClick(event) {
   if (suppressNextCadClick) { suppressNextCadClick = false; return; }
   const marker = event.target.closest('.photo-marker');
-  if (marker) { selectedPhotoPointId = marker.dataset.pointId; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); renderCad(); return; }
+  if (marker) {
+    selectedPhotoPointId = marker.dataset.pointId; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active');
+    const selectedPoint = projectPoints().find(point => point.id === selectedPhotoPointId);
+    if (selectedPoint?.areaId) { areaSelect.value = selectedPoint.areaId; renderAreas(); publishActiveArea(); } else renderCad();
+    return;
+  }
   const svg = event.currentTarget; const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
   const xy = point.matrixTransform(svg.getScreenCTM().inverse());
   if (!addingPhotoPoint) return;
@@ -396,7 +418,7 @@ function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.s
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
 
 async function createSession(area = currentArea()) {
-  if (!area) throw new Error('Seleziona un’area di intervento.');
+  if (!area) throw new Error('Seleziona un punto foto.');
   const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: projectSelect.value, area: area.name }) });
   if (!r.ok) throw new Error('Impossibile creare la sessione');
   session = await r.json();
@@ -410,7 +432,7 @@ function updateSessionUi() {
   cameraUrlEl.textContent = cameraUrl;
   qr.src = `/api/qr?text=${encodeURIComponent(cameraUrl)}`;
   expiryEl.textContent = `${session.project} • ${session.area} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}.`;
-  tokenModeInfo.textContent = `QR riusabile per “${session.project}”: puoi cambiare area senza scollegare la camera.`;
+  tokenModeInfo.textContent = `QR riusabile per “${session.project}”: puoi cambiare punto foto senza scollegare la camera.`;
   copyLinkBtn.disabled = false;
 }
 
@@ -524,7 +546,7 @@ function handleDataChannel(e) {
     else if (msg.type === 'photo-start') {
       if (!isCurrentCapture(captureRequestId, msg.requestId)) return;
       const area = currentSessionArea();
-      if (!area) { captureState.textContent = 'Seleziona un’area prima di scattare.'; clearCaptureRequest(); return; }
+      if (!area) { captureState.textContent = 'Seleziona un punto foto prima di scattare.'; clearCaptureRequest(); return; }
       pendingPhoto = { meta: msg, area, chunks: [], received: 0 };
       captureState.textContent = `Ricezione foto ${formatBytes(msg.size)}…`;
     } else if (msg.type === 'photo-end') {
@@ -562,14 +584,14 @@ function finishPhoto() {
 }
 
 async function savePhoto(blob, meta, selectedArea) {
-  if (!selectedArea || selectedArea.status !== 'open') throw new Error('L’area di intervento non è più aperta.');
+  if (!selectedArea || selectedArea.status !== 'open') throw new Error('Il punto foto non è più aperto.');
   photoUploadAbortController = new AbortController();
   const response = await fetch('/api/photos', { method: 'POST', signal: photoUploadAbortController.signal, headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name }, body: blob });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Salvataggio non riuscito');
   const saved = await response.json();
   if (!isCurrentCapture(captureRequestId, meta.requestId)) return;
   const area = (areasByProject[session.project] || []).find(item => item.id === selectedArea.id);
-  if (!area) throw new Error('Area non disponibile');
+  if (!area) throw new Error('Punto foto non disponibile');
   const photoId = crypto.randomUUID();
   const thumbnailKey = thumbnailStorageKey(session.project, area.id, photoId);
   try {
@@ -577,7 +599,7 @@ async function savePhoto(blob, meta, selectedArea) {
   } catch { /* l'originale resta disponibile anche se lo storage del browser è pieno */ }
   area.photos.push({ id: photoId, url: saved.url, thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
-  renderGallery();
+  renderAreas();
   sendSignal({ type: 'photo-saved', photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
   captureState.textContent = `Foto archiviata in “${area.name}”: ${formatBytes(blob.size)}.`;
   clearCaptureRequest();
@@ -594,11 +616,11 @@ function publishActiveArea() {
 function renderGallery() {
   const areas = areasByProject[projectSelect.value] || [];
   gallery.replaceChildren();
-  if (!areas.some(area => area.photos?.length)) { gallery.innerHTML = '<p class="small">Nessuna foto nell’area di intervento.</p>'; return; }
+  if (!areas.some(area => area.photos?.length)) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
   for (const area of areas) {
     if (!area.photos?.length) continue;
     const group = document.createElement('section'); group.className = 'photo-area';
-    const title = document.createElement('h3'); title.textContent = `${area.name}${area.status === 'closed' ? ' · chiusa' : ''}`;
+    const title = document.createElement('h3'); title.textContent = `${area.name}${area.status === 'closed' ? ' · chiuso' : ''}`;
     const items = document.createElement('div'); items.className = 'gallery';
     for (const photo of area.photos) {
       const figure = document.createElement('figure');
@@ -726,8 +748,8 @@ downloadProjectBtn.addEventListener('click', async () => {
   downloadProjectBtn.textContent = 'Preparazione…';
   try {
     if (!session || session.project !== project) {
-      const authorizationArea = (areasByProject[project] || [])[0];
-      if (!authorizationArea) throw new Error('Il progetto non contiene aree di intervento.');
+      const authorizationArea = currentSelectedArea() || (areasByProject[project] || []).find(area => (photoPointsByProject[project] || []).some(point => point.areaId === area.id));
+      if (!authorizationArea) throw new Error('Il progetto non contiene punti foto.');
       await createSession(authorizationArea);
       renderAreas();
     }
@@ -753,16 +775,9 @@ downloadProjectBtn.addEventListener('click', async () => {
 projectSelect.addEventListener('change', () => { pendingPhotoPoint = null; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); updateProjectUi(); });
 
 areaSelect.addEventListener('change', () => { renderAreas(); publishActiveArea(); });
-newAreaBtn.addEventListener('click', () => {
-  const project = projectSelect.value; const areas = areasByProject[project] || [];
-  const name = nextAreaName(areas, window.prompt('Nome area di intervento:', '') || '');
-  if (!name) return;
-  (areasByProject[project] ||= []).push(createInterventionArea(areas, name));
-  saveWorkspace(); renderAreas(); publishActiveArea();
-});
 closeAreaBtn.addEventListener('click', () => {
   const area = currentArea();
-  if (!area || !window.confirm(`Chiudere l’area “${area.name}”? Le foto resteranno nella sua cartella.`)) return;
+  if (!area || !window.confirm(`Chiudere il punto foto “${area.name}”? Le foto resteranno nella sua cartella.`)) return;
   area.status = 'closed';
   saveWorkspace(); renderAreas(); publishActiveArea();
 });
@@ -872,10 +887,13 @@ photoPointNameForm.addEventListener('submit', event => {
   photoPointName.setCustomValidity('');
   const photoPoint = createPhotoPoint(points, pendingPhotoPoint.x, pendingPhotoPoint.y, name);
   (photoPointsByProject[pendingPhotoPoint.project] ||= []).push(photoPoint);
+  linkPhotoPointsToAreas(photoPointsByProject[pendingPhotoPoint.project], areasByProject[pendingPhotoPoint.project] ||= []);
+  areaSelect.value = photoPoint.areaId;
   selectedPhotoPointId = photoPoint.id;
   pendingPhotoPoint = null;
   saveWorkspace();
-  renderCad();
+  renderAreas();
+  publishActiveArea();
 });
 photoPointName.addEventListener('input', () => photoPointName.setCustomValidity(''));
 cancelPhotoPointBtn.addEventListener('click', () => { pendingPhotoPoint = null; renderCad(); });
@@ -885,4 +903,4 @@ resetCadViewBtn.addEventListener('click', () => { cadView = cadBounds && { ...ca
 renderHelp();
 loadWorkspace();
 config = await loadConfig();
-setStatus(statusEl, 'Crea un’area', 'warn');
+setStatus(statusEl, 'Crea un punto foto', 'warn');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, nextPhotoPointName, nextProjectName } from '../public/controller-model.js';
+import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
@@ -42,6 +42,12 @@ assert.equal(namedPhotoPoint.label, 'Nodo nord');
 assert.equal(nextPhotoPointName([], ' Nodo nord '), 'Nodo nord');
 assert.equal(nextPhotoPointName([{ label: 'Nodo nord' }], 'nodo NORD'), '');
 assert.equal(nextPhotoPointName([], '   '), '');
+const linkedPoints = [{ id: 'point-1', label: 'Nodo nord' }];
+const linkedAreas = [];
+assert.equal(linkPhotoPointsToAreas(linkedPoints, linkedAreas), true);
+assert.equal(linkedAreas[0].name, 'Nodo nord');
+assert.equal(linkedPoints[0].areaId, linkedAreas[0].id);
+assert.equal(linkPhotoPointsToAreas(linkedPoints, linkedAreas), false);
 const binding = createSessionBinding('Progetto', 'Pilastro sud');
 assert.deepEqual(binding, { project: 'Progetto', area: 'Pilastro sud' });
 assert.equal(matchesSessionBinding(binding, 'Progetto', 'Pilastro sud'), true);
@@ -66,7 +72,7 @@ assert.equal(safeFolderName('../segreto'), '');
 assert.equal(photoExtension('image/png'), 'png');
 assert.equal(HELP_STEPS.length, 5);
 assert.deepEqual(HELP_STEPS[3].details, [
-  'Seleziona prima l’area di intervento.',
-  'Il QR è vincolato al progetto; puoi cambiare area senza scollegare la camera.',
+  'Seleziona prima il punto foto.',
+  'Il QR è vincolato al progetto; puoi cambiare punto foto senza scollegare la camera.',
   'Il cellulare potrà riagganciarsi fino alla scadenza.'
 ]);
