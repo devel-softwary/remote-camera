@@ -15,5 +15,7 @@ assert.doesNotMatch(controllerHtml, /id="(?:newMappedArea|completeMappedArea|can
 assert.match(controllerHtml, /Sul layer resta disponibile solo il posizionamento dei punti foto|Aggiungi punto foto/);
 assert.match(controllerJs, /Rinomina \$\{point\.label\}/);
 assert.match(controllerJs, /Elimina \$\{point\.label\}/);
+assert.match(controllerJs, /addEventListener\('dblclick', handleCadDoubleClick\)/);
+assert.match(controllerJs, /function beginPhotoPoint\(x, y\)/);
 
 console.log('Layer photo-point-only regression passed');

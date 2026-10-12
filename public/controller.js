@@ -345,6 +345,7 @@ function renderCad() {
     const marker = document.createElementNS(svg.namespaceURI, 'circle'); marker.setAttribute('cx', pendingPoint.x); marker.setAttribute('cy', -pendingPoint.y); marker.setAttribute('r', Math.max(box.width, box.height) * .012); marker.setAttribute('class', 'photo-marker pending'); svg.append(marker);
   }
   svg.addEventListener('click', handleCadClick);
+  svg.addEventListener('dblclick', handleCadDoubleClick);
   svg.addEventListener('pointerdown', event => {
     if (addingPhotoPoint || event.target.closest('.photo-marker')) return;
     cadPan = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
@@ -384,7 +385,19 @@ function handleCadClick(event) {
   const svg = event.currentTarget; const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
   const xy = point.matrixTransform(svg.getScreenCTM().inverse());
   if (!addingPhotoPoint) return;
-  pendingPhotoPoint = { project: projectSelect.value, x: xy.x, y: -xy.y };
+  beginPhotoPoint(xy.x, -xy.y);
+}
+
+function handleCadDoubleClick(event) {
+  if (event.target.closest('.photo-marker')) return;
+  event.preventDefault();
+  const svg = event.currentTarget; const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+  const xy = point.matrixTransform(svg.getScreenCTM().inverse());
+  beginPhotoPoint(xy.x, -xy.y);
+}
+
+function beginPhotoPoint(x, y) {
+  pendingPhotoPoint = { project: projectSelect.value, x, y };
   addingPhotoPoint = false;
   addPhotoPointBtn.classList.remove('active');
   photoPointName.value = '';
