@@ -7,6 +7,7 @@ import { cameraSessionLink } from './session-links.js';
 import { createThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
+import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -85,6 +86,7 @@ let cadBounds = null;
 let cadView = null;
 let layerImageUrl = '';
 const cadDrawingByProject = {};
+const loadingLayerProjects = new Set();
 let addingPhotoPoint = false;
 let selectedPhotoPointId = null;
 let cadPan = null;
@@ -241,6 +243,7 @@ function updateProjectUi() {
   dwgState.textContent = cad ? (/\.dwg$/i.test(cad.name) ? 'DWG caricato: per disegnare serve la conversione in DXF.' : `Layer attivo: ${cad.name}`) : 'Carica un’immagine o un file DWG/DXF per iniziare.';
   renderCad();
   renderAreas();
+  if (projectSelected && cad && !drawing && !loadingLayerProjects.has(project)) void restoreProjectLayer(project);
 }
 
 function projectPoints() { return photoPointsByProject[projectSelect.value] || []; }
@@ -336,6 +339,43 @@ function loadLayerImage(file) {
     image.onerror = () => { URL.revokeObjectURL(imageUrl); reject(new Error('Immagine non valida o non leggibile.')); };
     image.src = imageUrl;
   });
+}
+
+async function createLayerDrawing(file, name, kind) {
+  if (kind === 'image') {
+    const image = await loadLayerImage(file);
+    const bounds = { x: 0, y: -image.height, width: image.width, height: image.height };
+    return { shapes: [], bounds, view: { ...bounds }, imageUrl: image.imageUrl };
+  }
+  if (/\.dxf$/i.test(name)) {
+    const shapes = parseDxf(await file.text());
+    if (!shapes.length) throw new Error('Il DXF non contiene entità supportate.');
+    const bounds = drawingBounds(shapes);
+    const flippedBounds = { ...bounds, y: -bounds.y - bounds.height };
+    return { shapes, bounds: flippedBounds, view: { ...flippedBounds } };
+  }
+  return { shapes: [], bounds: null, view: null, unsupported: true };
+}
+
+async function restoreProjectLayer(project) {
+  loadingLayerProjects.add(project);
+  if (projectSelect.value === project) dwgState.textContent = 'Caricamento layer…';
+  try {
+    const record = await loadLayerFile(project);
+    if (!record) {
+      if (projectSelect.value === project) dwgState.textContent = 'File layer non disponibile: caricalo nuovamente.';
+      return;
+    }
+    const metadata = cadByProject[project];
+    const kind = metadata?.kind || layerFileKind(record);
+    const drawing = await createLayerDrawing(record.blob, record.name, kind);
+    if (drawing) cadDrawingByProject[project] = drawing;
+    if (projectSelect.value === project) updateProjectUi();
+  } catch (error) {
+    if (projectSelect.value === project) dwgState.textContent = `Impossibile ripristinare il layer: ${error.message}`;
+  } finally {
+    loadingLayerProjects.delete(project);
+  }
 }
 
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
@@ -731,10 +771,16 @@ newProjectBtn.addEventListener('click', () => {
 
 syncWorkspaceBtn.addEventListener('click', syncWorkspace);
 
-renameProjectBtn.addEventListener('click', () => {
+renameProjectBtn.addEventListener('click', async () => {
   const current = projectSelect.value;
   const name = nextProjectName(projects.filter(project => project !== current), window.prompt('Nuovo nome progetto:', current) || '');
   if (!name) return;
+  try {
+    if (cadByProject[current]) await moveLayerFile(current, name);
+  } catch (error) {
+    window.alert(`Impossibile rinominare il layer: ${error.message}`);
+    return;
+  }
   projects = projects.map(project => project === current ? name : project);
   if (cadByProject[current]) { cadByProject[name] = cadByProject[current]; delete cadByProject[current]; }
   if (cadDrawingByProject[current]) { cadDrawingByProject[name] = cadDrawingByProject[current]; delete cadDrawingByProject[current]; }
@@ -746,9 +792,10 @@ renameProjectBtn.addEventListener('click', () => {
   updateProjectUi();
 });
 
-deleteProjectBtn.addEventListener('click', () => {
+deleteProjectBtn.addEventListener('click', async () => {
   const current = projectSelect.value;
   if (!current || !window.confirm(`Eliminare il progetto “${current}”?`)) return;
+  try { await deleteLayerFile(current); } catch (error) { window.alert(`Impossibile eliminare il layer: ${error.message}`); return; }
   projects = projects.filter(project => project !== current);
   revokeLayerImage(cadDrawingByProject[current]);
   delete cadByProject[current];
@@ -766,20 +813,11 @@ cadFile.addEventListener('change', async () => {
   if (error) { if (file) window.alert(error); cadFile.value = ''; return; }
   const project = projectSelect.value;
   const previousDrawing = cadDrawingByProject[project];
+  let drawing = null;
   try {
-    let drawing = null;
     const kind = layerFileKind(file);
-    if (kind === 'image') {
-      const image = await loadLayerImage(file);
-      const bounds = { x: 0, y: -image.height, width: image.width, height: image.height };
-      drawing = { shapes: [], bounds, view: { ...bounds }, imageUrl: image.imageUrl };
-    } else if (/\.dxf$/i.test(file.name)) {
-      const shapes = parseDxf(await file.text());
-      if (!shapes.length) throw new Error('Il DXF non contiene entità supportate.');
-      const bounds = drawingBounds(shapes);
-      const flippedBounds = { ...bounds, y: -bounds.y - bounds.height };
-      drawing = { shapes, bounds: flippedBounds, view: { ...flippedBounds } };
-    }
+    drawing = await createLayerDrawing(file, file.name, kind);
+    await saveLayerFile(project, file);
     revokeLayerImage(previousDrawing);
     if (drawing) cadDrawingByProject[project] = drawing;
     else delete cadDrawingByProject[project];
@@ -788,15 +826,17 @@ cadFile.addEventListener('change', async () => {
     saveWorkspace();
     updateProjectUi();
   } catch (uploadError) {
+    if (drawing !== previousDrawing) revokeLayerImage(drawing);
     window.alert(uploadError.message);
   } finally {
     cadFile.value = '';
   }
 });
 
-deleteCadBtn.addEventListener('click', () => {
+deleteCadBtn.addEventListener('click', async () => {
   const project = projectSelect.value;
   if (!project || !window.confirm('Rimuovere il layer dal progetto?')) return;
+  try { await deleteLayerFile(project); } catch (error) { window.alert(error.message); return; }
   revokeLayerImage(cadDrawingByProject[project]);
   delete cadByProject[project];
   cadShapes = []; cadBounds = null; cadView = null; layerImageUrl = ''; delete cadDrawingByProject[project]; selectedPhotoPointId = null;
