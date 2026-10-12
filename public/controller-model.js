@@ -95,3 +95,9 @@ export function openAreaForProject(areasByProject, project) {
 export function canCaptureArea(area, session, project, channelState) {
   return Boolean(area && session?.project === project && channelState === 'open');
 }
+
+export function nextPhotoPointName(points, requestedName) {
+  const name = String(requestedName || '').trim();
+  if (!name) return '';
+  return points.some(point => point.label?.toLocaleLowerCase() === name.toLocaleLowerCase()) ? '' : name;
+}

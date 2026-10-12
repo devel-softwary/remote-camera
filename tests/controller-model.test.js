@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, nextProjectName } from '../public/controller-model.js';
+import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, nextPhotoPointName, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
@@ -37,6 +37,11 @@ assert.equal(isPointerDrag(10, 10, 12, 12), false);
 assert.equal(isPointerDrag(10, 10, 14, 10), true);
 const photoPoint = createPhotoPoint([], 12, 8);
 assert.deepEqual({ label: photoPoint.label, x: photoPoint.x, y: photoPoint.y }, { label: 'Punto foto 1', x: 12, y: 8 });
+const namedPhotoPoint = createPhotoPoint([], 12, 8, 'Nodo nord');
+assert.equal(namedPhotoPoint.label, 'Nodo nord');
+assert.equal(nextPhotoPointName([], ' Nodo nord '), 'Nodo nord');
+assert.equal(nextPhotoPointName([{ label: 'Nodo nord' }], 'nodo NORD'), '');
+assert.equal(nextPhotoPointName([], '   '), '');
 const binding = createSessionBinding('Progetto', 'Pilastro sud');
 assert.deepEqual(binding, { project: 'Progetto', area: 'Pilastro sud' });
 assert.equal(matchesSessionBinding(binding, 'Progetto', 'Pilastro sud'), true);

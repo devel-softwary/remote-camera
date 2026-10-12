@@ -94,14 +94,20 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .cad-toolbar button { min-height:38px; padding:0 11px; }
 .cad-toolbar-spacer { flex:1; }
 .cad-instructions { margin:0 0 12px; font-size:.88rem; }
+.photo-point-form { display:grid; grid-template-columns:minmax(180px,1fr) auto; gap:10px; align-items:end; margin-bottom:12px; padding:12px; border:1px solid #36425f; border-radius:12px; background:#0c1221; }
+.photo-point-form[hidden] { display:none; }
+.photo-point-form-actions { display:flex; gap:8px; }
+.photo-point-form-actions button { min-height:46px; }
 #cadCanvas { display:block; height:420px; overflow:hidden; padding:0; }
 .cad-svg { width:100%; height:100%; background:#0b1020; cursor:crosshair; touch-action:none; }
 .cad-shape { fill:none; stroke:#9eb7ff; stroke-width:1; vector-effect:non-scaling-stroke; }
 .layer-image { pointer-events:none; }
 .photo-marker { fill:#ffb020; stroke:#fff4d6; stroke-width:1; vector-effect:non-scaling-stroke; cursor:pointer; }
 .photo-marker.selected { fill:#3157e7; stroke-width:2; }
+.photo-marker.pending { fill:#3ed598; stroke-dasharray:3 2; }
+.photo-marker-label { fill:#fff; stroke:#10182b; stroke-width:3px; vector-effect:non-scaling-stroke; paint-order:stroke; font-weight:700; pointer-events:none; }
 .dwg-placeholder span { font-size:3rem; line-height:1; }
 .dwg-placeholder p { margin:8px 0 0; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media (max-width:1100px) { .controller-layout{grid-template-columns:240px minmax(0,1fr)}.sidebar-left{position:static} }
-@media (max-width:700px) { main{padding:14px}.controller-header{align-items:flex-start;flex-direction:column}.controller-layout{grid-template-columns:1fr;grid-template-areas:'left' 'main'}.sidebar{position:static}.sidebar-section{padding:15px}.controller-video{aspect-ratio:9/16;max-height:65vh}.secret-url{display:none}.section-heading{align-items:flex-start;flex-direction:column}.section-heading .small{text-align:left} }
+@media (max-width:700px) { main{padding:14px}.controller-header{align-items:flex-start;flex-direction:column}.controller-layout{grid-template-columns:1fr;grid-template-areas:'left' 'main'}.sidebar{position:static}.sidebar-section{padding:15px}.controller-video{aspect-ratio:9/16;max-height:65vh}.secret-url{display:none}.section-heading{align-items:flex-start;flex-direction:column}.section-heading .small{text-align:left}.photo-point-form{grid-template-columns:1fr} }
