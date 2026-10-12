@@ -1,4 +1,8 @@
 export const MAX_CAD_SIZE = 50 * 1024 * 1024;
+export const MAX_LAYER_IMAGE_SIZE = 20 * 1024 * 1024;
+
+const LAYER_IMAGE_EXTENSIONS = /\.(png|jpe?g|webp|gif)$/i;
+const LAYER_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 
 export function isCadFile(file) {
   return Boolean(file && /\.(dwg|dxf)$/i.test(file.name));
@@ -8,6 +12,26 @@ export function cadValidationError(file) {
   if (!file) return 'Seleziona un file CAD.';
   if (!isCadFile(file)) return 'Sono supportati solo file DWG o DXF.';
   if (file.size > MAX_CAD_SIZE) return 'Il file CAD supera il limite di 50 MB.';
+  return '';
+}
+
+export function isLayerImage(file) {
+  if (!file || !LAYER_IMAGE_EXTENSIONS.test(file.name)) return false;
+  return !file.type || LAYER_IMAGE_TYPES.has(file.type);
+}
+
+export function layerFileKind(file) {
+  if (isLayerImage(file)) return 'image';
+  if (isCadFile(file)) return 'cad';
+  return '';
+}
+
+export function layerValidationError(file) {
+  if (!file) return 'Seleziona un’immagine o un file DWG/DXF.';
+  const kind = layerFileKind(file);
+  if (!kind) return 'Sono supportati PNG, JPG, WEBP, GIF, DWG e DXF.';
+  if (kind === 'image' && file.size > MAX_LAYER_IMAGE_SIZE) return 'L’immagine supera il limite di 20 MB.';
+  if (kind === 'cad' && file.size > MAX_CAD_SIZE) return 'Il file CAD supera il limite di 50 MB.';
   return '';
 }
 

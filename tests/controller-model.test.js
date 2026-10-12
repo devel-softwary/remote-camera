@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MAX_CAD_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isProjectSelected, nextProjectName } from '../public/controller-model.js';
+import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
@@ -11,6 +11,14 @@ assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
 assert.equal(cadValidationError({ name: 'rilievo.pdf', size: 1 }), 'Sono supportati solo file DWG o DXF.');
 assert.equal(cadValidationError({ name: 'rilievo.dxf', size: MAX_CAD_SIZE + 1 }), 'Il file CAD supera il limite di 50 MB.');
 assert.equal(cadValidationError({ name: 'rilievo.dxf', size: MAX_CAD_SIZE }), '');
+assert.equal(isLayerImage({ name: 'planimetria.JPG', type: 'image/jpeg' }), true);
+assert.equal(isLayerImage({ name: 'planimetria.svg', type: 'image/svg+xml' }), false);
+assert.equal(isLayerImage({ name: 'planimetria.jpg', type: 'text/html' }), false);
+assert.equal(layerFileKind({ name: 'planimetria.webp', type: 'image/webp' }), 'image');
+assert.equal(layerFileKind({ name: 'planimetria.dwg' }), 'cad');
+assert.equal(layerValidationError({ name: 'planimetria.pdf', type: 'application/pdf', size: 1 }), 'Sono supportati PNG, JPG, WEBP, GIF, DWG e DXF.');
+assert.equal(layerValidationError({ name: 'planimetria.png', type: 'image/png', size: MAX_LAYER_IMAGE_SIZE + 1 }), 'L’immagine supera il limite di 20 MB.');
+assert.equal(layerValidationError({ name: 'planimetria.png', type: 'image/png', size: MAX_LAYER_IMAGE_SIZE }), '');
 assert.equal(nextProjectName(['Rilievo 01'], ' rilievo 01 '), '');
 assert.equal(nextProjectName(['Rilievo 01'], ' Rilievo 02 '), 'Rilievo 02');
 assert.equal(isProjectSelected('Rilievo 02'), true);
@@ -49,8 +57,8 @@ assert.equal(mappedArea.vertices.length, 3);
 assert.equal(safeFolderName('Area 01'), 'Area 01');
 assert.equal(safeFolderName('../segreto'), '');
 assert.equal(photoExtension('image/png'), 'png');
-assert.equal(HELP_STEPS.length, 4);
-assert.deepEqual(HELP_STEPS[2].details, [
+assert.equal(HELP_STEPS.length, 5);
+assert.deepEqual(HELP_STEPS[3].details, [
   'Seleziona prima l’area di intervento.',
   'Il QR è vincolato al progetto; puoi cambiare area senza scollegare la camera.',
   'Il cellulare potrà riagganciarsi fino alla scadenza.'

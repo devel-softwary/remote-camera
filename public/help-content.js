@@ -1,5 +1,6 @@
 export const HELP_STEPS = [
   { title: 'Crea un progetto' },
+  { title: 'Carica un’immagine o un file DWG/DXF come layer' },
   { title: 'Crea una o più aree di intervento da rilevare' },
   {
     title: 'Avvia una sessione',

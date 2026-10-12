@@ -3,15 +3,15 @@
 <body class="controller-page"><main class="controller-shell">
   <header class="controller-header"><h1>Remote Camera Controller</h1><div class="header-controls"><button id="helpButton" class="help-button secondary" type="button" aria-label="Apri guida rapida" aria-haspopup="dialog">?</button><span id="status" class="status"><span class="dot"></span><span class="status-text">Connessione…</span></span></div></header>
   <div class="controller-layout">
-    <aside class="sidebar sidebar-left" aria-label="Gestione progetto e CAD">
+    <aside class="sidebar sidebar-left" aria-label="Gestione progetto e layer">
       <section class="sidebar-section"><h2>Progetto</h2>
         <label class="sr-only" for="projectSelect">Seleziona progetto</label><select id="projectSelect"><option value="">Seleziona progetto…</option></select>
         <div class="sidebar-actions"><button id="newProject" type="button">Nuovo</button><button id="syncWorkspace" class="secondary" type="button">Sincronizza</button><button id="renameProject" class="secondary" type="button" disabled>Rinomina</button><button id="downloadProject" class="secondary" type="button" disabled>Scarica ZIP</button><button id="deleteProject" class="danger" type="button" disabled>Elimina</button></div>
       </section>
-      <section class="sidebar-section cad-section"><h2>CAD</h2>
-        <input id="cadFile" type="file" accept=".dwg,.dxf,application/acad,image/vnd.dwg,application/dxf" class="hidden">
-        <button id="uploadCad" class="secondary" type="button">Carica DWG/DXF</button><button id="deleteCad" class="danger" type="button" disabled>Elimina</button>
-        <p id="cadFileName" class="small">Nessun file CAD caricato.</p>
+      <section class="sidebar-section cad-section"><h2>Layer</h2>
+        <input id="cadFile" type="file" accept=".png,.jpg,.jpeg,.webp,.gif,.dwg,.dxf,image/png,image/jpeg,image/webp,image/gif,application/acad,image/vnd.dwg,application/dxf" class="hidden">
+        <button id="uploadCad" class="secondary" type="button">Carica immagine o DWG</button><button id="deleteCad" class="danger" type="button" disabled>Elimina</button>
+        <p id="cadFileName" class="small">Nessun layer caricato.</p>
       </section>
       <section id="areaSection" class="sidebar-section" aria-disabled="true"><h2>Area di intervento</h2>
         <select id="areaSelect" aria-label="Area di intervento" disabled><option value="">Nessuna area</option></select>
@@ -33,10 +33,10 @@
         <p id="capabilities" class="small">In attesa delle capacità della camera.</p>
         <div class="capture-bar"><button id="capture" class="capture" disabled>📷 Scatta foto full-resolution</button><span id="captureState" class="small">In attesa del telefono.</span></div>
       </section>
-      <section class="card dwg-card"><div class="section-heading"><h2>Planimetria CAD</h2><span id="dwgState" class="small">Carica un file DWG o DXF per iniziare.</span></div>
-        <p class="cad-instructions">Disegna direttamente sulla planimetria: seleziona “Nuova area”, poi tocca almeno tre punti e conferma.</p>
+      <section class="card dwg-card"><div class="section-heading"><h2>Layer di intervento</h2><span id="dwgState" class="small">Carica un’immagine o un file DWG/DXF per iniziare.</span></div>
+        <p class="cad-instructions">Disegna direttamente sul layer: seleziona “Nuova area”, poi tocca almeno tre punti e conferma.</p>
         <div class="cad-toolbar"><button id="newMappedArea" type="button" disabled>＋ Nuova area</button><button id="completeMappedArea" class="secondary" type="button" disabled>Conferma area</button><button id="cancelMappedArea" class="secondary" type="button" disabled>Annulla</button><button id="addPhotoPoint" class="secondary" type="button" disabled>Aggiungi punto foto</button><span class="cad-toolbar-spacer"></span><button id="zoomOutCad" class="secondary" type="button" disabled aria-label="Riduci disegno">−</button><button id="zoomInCad" class="secondary" type="button" disabled aria-label="Ingrandisci disegno">＋</button><button id="resetCadView" class="secondary" type="button" disabled>Adatta</button></div>
-        <p id="photoPointState" class="small">Crea o seleziona un’area sulla planimetria.</p><div id="cadCanvas" class="dwg-placeholder" aria-live="polite"><span>▧</span><p>Area disegno CAD</p></div>
+        <p id="photoPointState" class="small">Crea o seleziona un’area sul layer.</p><div id="cadCanvas" class="dwg-placeholder" aria-live="polite"><span>▧</span><p>Area disegno layer</p></div>
       </section>
       <section class="card"><h2>Elenco foto</h2><div id="gallery" class="gallery"><p class="small">Nessuna foto.</p></div></section>
     </div>

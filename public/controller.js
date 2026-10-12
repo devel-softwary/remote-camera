@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { cadValidationError, canCaptureArea, canCreateMappedArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
+import { canCaptureArea, canCreateMappedArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, layerFileKind, layerValidationError, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -86,6 +86,7 @@ let areasByProject = {};
 let cadShapes = [];
 let cadBounds = null;
 let cadView = null;
+let layerImageUrl = '';
 const cadDrawingByProject = {};
 let addingPhotoPoint = false;
 let drawingArea = false;
@@ -228,21 +229,23 @@ function updateProjectUi() {
   cadShapes = drawing?.shapes || [];
   cadBounds = drawing?.bounds || null;
   cadView = drawing?.view || (cadBounds && { ...cadBounds });
+  layerImageUrl = drawing?.imageUrl || '';
+  const drawableLayer = Boolean(cadBounds && (cadShapes.length || layerImageUrl));
   renameProjectBtn.disabled = !projectSelected;
   deleteProjectBtn.disabled = !projectSelected;
   downloadProjectBtn.disabled = !canDownloadProject(project);
   uploadCadBtn.disabled = !projectSelected;
   deleteCadBtn.disabled = !cad;
-  addPhotoPointBtn.disabled = !cadShapes.length;
-  newMappedAreaBtn.disabled = !cadShapes.length || !projectSelected;
+  addPhotoPointBtn.disabled = !drawableLayer;
+  newMappedAreaBtn.disabled = !drawableLayer || !projectSelected;
   completeMappedAreaBtn.disabled = !drawingArea || !canCreateMappedArea(pendingAreaVertices);
   cancelMappedAreaBtn.disabled = !drawingArea;
-  [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !cadShapes.length);
+  [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !drawableLayer);
   areaSection.setAttribute('aria-disabled', String(!projectSelected));
   [sessionSection, cameraQrSection].forEach(section => section.setAttribute('aria-disabled', String(!projectSelected)));
   copyLinkBtn.disabled = !projectSelected || !session || session.project !== project;
-  cadFileName.textContent = cad ? `${cad.name} (${formatBytes(cad.size)})` : 'Nessun file CAD caricato.';
-  dwgState.textContent = cad ? (/\.dwg$/i.test(cad.name) ? 'DWG caricato: serve un convertitore DWG→DXF lato server per la visualizzazione.' : `File selezionato: ${cad.name}`) : 'Carica un file DWG o DXF per iniziare.';
+  cadFileName.textContent = cad ? `${cad.name} (${formatBytes(cad.size)})` : 'Nessun layer caricato.';
+  dwgState.textContent = cad ? (/\.dwg$/i.test(cad.name) ? 'DWG caricato: per disegnare serve la conversione in DXF.' : `Layer attivo: ${cad.name}`) : 'Carica un’immagine o un file DWG/DXF per iniziare.';
   renderCad();
   renderAreas();
 }
@@ -251,13 +254,24 @@ function projectPoints() { return photoPointsByProject[projectSelect.value] || [
 function projectAreas() { return areasByProject[projectSelect.value] || []; }
 
 function renderCad() {
-  if (!cadShapes.length || !cadBounds) {
-    cadCanvas.innerHTML = '<span>▧</span><p>Area disegno CAD</p>';
+  if ((!cadShapes.length && !layerImageUrl) || !cadBounds) {
+    cadCanvas.innerHTML = '<span>▧</span><p>Area disegno layer</p>';
     return;
   }
   const box = cadView || cadBounds;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('class', 'cad-svg'); svg.setAttribute('viewBox', `${box.x} ${box.y} ${box.width} ${box.height}`);
+  if (layerImageUrl) {
+    const image = document.createElementNS(svg.namespaceURI, 'image');
+    image.setAttribute('href', layerImageUrl);
+    image.setAttribute('x', cadBounds.x);
+    image.setAttribute('y', cadBounds.y);
+    image.setAttribute('width', cadBounds.width);
+    image.setAttribute('height', cadBounds.height);
+    image.setAttribute('preserveAspectRatio', 'none');
+    image.setAttribute('class', 'layer-image');
+    svg.append(image);
+  }
   for (const shape of cadShapes) {
     const node = document.createElementNS(svg.namespaceURI, shape.type === 'circle' ? 'circle' : shape.type === 'polyline' ? 'polyline' : shape.type === 'point' ? 'circle' : 'line');
     if (shape.type === 'line') { node.setAttribute('x1', shape.x1); node.setAttribute('y1', -shape.y1); node.setAttribute('x2', shape.x2); node.setAttribute('y2', -shape.y2); }
@@ -325,6 +339,20 @@ function changeCadZoom(factor) {
   const width = cadView.width * factor; const height = cadView.height * factor;
   cadView = { x: cadView.x + (cadView.width - width) / 2, y: cadView.y + (cadView.height - height) / 2, width, height };
   cadDrawingByProject[projectSelect.value].view = cadView; renderCad();
+}
+
+function revokeLayerImage(drawing) {
+  if (drawing?.imageUrl) URL.revokeObjectURL(drawing.imageUrl);
+}
+
+function loadLayerImage(file) {
+  return new Promise((resolve, reject) => {
+    const imageUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => resolve({ imageUrl, width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => { URL.revokeObjectURL(imageUrl); reject(new Error('Immagine non valida o non leggibile.')); };
+    image.src = imageUrl;
+  });
 }
 
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
@@ -726,6 +754,8 @@ renameProjectBtn.addEventListener('click', () => {
   if (!name) return;
   projects = projects.map(project => project === current ? name : project);
   if (cadByProject[current]) { cadByProject[name] = cadByProject[current]; delete cadByProject[current]; }
+  if (cadDrawingByProject[current]) { cadDrawingByProject[name] = cadDrawingByProject[current]; delete cadDrawingByProject[current]; }
+  if (photoPointsByProject[current]) { photoPointsByProject[name] = photoPointsByProject[current]; delete photoPointsByProject[current]; }
   if (areasByProject[current]) { areasByProject[name] = areasByProject[current]; delete areasByProject[current]; }
   saveWorkspace();
   renderProjects();
@@ -737,7 +767,9 @@ deleteProjectBtn.addEventListener('click', () => {
   const current = projectSelect.value;
   if (!current || !window.confirm(`Eliminare il progetto “${current}”?`)) return;
   projects = projects.filter(project => project !== current);
+  revokeLayerImage(cadDrawingByProject[current]);
   delete cadByProject[current];
+  delete cadDrawingByProject[current];
   delete photoPointsByProject[current];
   delete areasByProject[current];
   saveWorkspace();
@@ -745,26 +777,46 @@ deleteProjectBtn.addEventListener('click', () => {
 });
 
 uploadCadBtn.addEventListener('click', () => cadFile.click());
-cadFile.addEventListener('change', () => {
+cadFile.addEventListener('change', async () => {
   const file = cadFile.files?.[0];
-  const error = cadValidationError(file);
+  const error = layerValidationError(file);
   if (error) { if (file) window.alert(error); cadFile.value = ''; return; }
-  cadByProject[projectSelect.value] = { name: file.name, size: file.size };
-  if (/\.dxf$/i.test(file.name)) {
-    const reader = new FileReader();
-    reader.onload = () => { cadShapes = parseDxf(String(reader.result)); const bounds = drawingBounds(cadShapes); cadBounds = { ...bounds, y: -bounds.y - bounds.height }; cadView = { ...cadBounds }; cadDrawingByProject[projectSelect.value] = { shapes: cadShapes, bounds: cadBounds, view: cadView }; selectedPhotoPointId = null; updateProjectUi(); };
-    reader.readAsText(file);
-  } else { cadShapes = []; cadBounds = null; cadView = null; delete cadDrawingByProject[projectSelect.value]; dwgState.textContent = 'DWG caricato: serve un convertitore DWG→DXF lato server per la visualizzazione.'; }
-  saveWorkspace();
-  updateProjectUi();
-  cadFile.value = '';
+  const project = projectSelect.value;
+  const previousDrawing = cadDrawingByProject[project];
+  try {
+    let drawing = null;
+    const kind = layerFileKind(file);
+    if (kind === 'image') {
+      const image = await loadLayerImage(file);
+      const bounds = { x: 0, y: -image.height, width: image.width, height: image.height };
+      drawing = { shapes: [], bounds, view: { ...bounds }, imageUrl: image.imageUrl };
+    } else if (/\.dxf$/i.test(file.name)) {
+      const shapes = parseDxf(await file.text());
+      if (!shapes.length) throw new Error('Il DXF non contiene entità supportate.');
+      const bounds = drawingBounds(shapes);
+      const flippedBounds = { ...bounds, y: -bounds.y - bounds.height };
+      drawing = { shapes, bounds: flippedBounds, view: { ...flippedBounds } };
+    }
+    revokeLayerImage(previousDrawing);
+    if (drawing) cadDrawingByProject[project] = drawing;
+    else delete cadDrawingByProject[project];
+    cadByProject[project] = { name: file.name, size: file.size, kind };
+    selectedPhotoPointId = null;
+    saveWorkspace();
+    updateProjectUi();
+  } catch (uploadError) {
+    window.alert(uploadError.message);
+  } finally {
+    cadFile.value = '';
+  }
 });
 
 deleteCadBtn.addEventListener('click', () => {
   const project = projectSelect.value;
-  if (!project || !window.confirm('Rimuovere il file CAD dal progetto?')) return;
+  if (!project || !window.confirm('Rimuovere il layer dal progetto?')) return;
+  revokeLayerImage(cadDrawingByProject[project]);
   delete cadByProject[project];
-  cadShapes = []; cadBounds = null; cadView = null; delete cadDrawingByProject[project]; selectedPhotoPointId = null;
+  cadShapes = []; cadBounds = null; cadView = null; layerImageUrl = ''; delete cadDrawingByProject[project]; selectedPhotoPointId = null;
   saveWorkspace();
   updateProjectUi();
 });

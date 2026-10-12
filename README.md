@@ -13,6 +13,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
 - aree di intervento nominate, con foto archiviate in `uploads/<progetto>/<area>`
+- layer immagine o CAD per disegnare le aree di intervento sulla planimetria
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
 - download ZIP dell'intero progetto dal controller, con struttura per area
 - STUN incluso; TURN configurabile via variabili d'ambiente

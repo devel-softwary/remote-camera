@@ -2,10 +2,10 @@
 
 Il controller usa un workspace responsivo a tre colonne:
 
-- sinistra: progetto e file CAD;
-- centro: video remoto, controlli, area CAD e foto;
+- sinistra: progetto e layer immagine/CAD;
+- centro: video remoto, controlli, area layer e foto;
 - destra: sessione e QR code.
 
-La selezione progetto e il riferimento al CAD rimangono locali al browser. Il file CAD viene validato (DWG/DXF, massimo 50 MB) prima di essere mostrato nell'area di lavoro. I DXF sono renderizzati localmente con zoom e punti foto; ogni punto può generare un QR per una sessione dedicata. Il rendering di un DWG binario richiede un convertitore DWG→DXF lato server.
+La selezione progetto e il riferimento al layer rimangono locali al browser. Sono accettate immagini PNG/JPG/WEBP/GIF fino a 20 MB e file DWG/DXF fino a 50 MB. Immagini e DXF sono renderizzati localmente con zoom, aree e punti foto. Il rendering di un DWG binario richiede un convertitore DWG→DXF lato server.
 
 La sessione può usare un token monouso (predefinito) o riusabile. Un token riusabile consente allo stesso QR di riagganciare la camera fino alla scadenza della sessione; trattandosi di un segreto di accesso, va condiviso solo con il dispositivo autorizzato.
