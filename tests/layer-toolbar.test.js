@@ -9,6 +9,7 @@ assert.match(controllerHtml, /id="photoPointName"[^>]*maxlength="80"/);
 assert.match(controllerHtml, /id="photoPointNameForm"/);
 assert.match(controllerHtml, /<h2>Punto foto<\/h2>/);
 assert.match(controllerHtml, /id="photoPointList"/);
+assert.match(controllerHtml, /id="startPointSession"[^>]*>Avvia sessione<\/button>/);
 assert.doesNotMatch(controllerHtml, /id="newArea"/);
 assert.doesNotMatch(controllerHtml, /id="(?:newMappedArea|completeMappedArea|cancelMappedArea)"/);
 assert.match(controllerHtml, /Sul layer resta disponibile solo il posizionamento dei punti foto|Aggiungi punto foto/);

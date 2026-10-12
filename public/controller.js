@@ -1,6 +1,6 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { canCaptureArea, canDownloadProject, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint, reopenInterventionArea } from './controller-model.js';
+import { canCaptureArea, canDownloadProject, canStartPointSession, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
@@ -51,6 +51,7 @@ const photoPointName = document.querySelector('#photoPointName');
 const cancelPhotoPointBtn = document.querySelector('#cancelPhotoPoint');
 const areaSelect = document.querySelector('#areaSelect');
 const photoPointList = document.querySelector('#photoPointList');
+const startPointSessionBtn = document.querySelector('#startPointSession');
 const closeAreaBtn = document.querySelector('#closeArea');
 const reopenAreaBtn = document.querySelector('#reopenArea');
 const areaState = document.querySelector('#areaState');
@@ -95,6 +96,7 @@ let pendingPhotoPoint = null;
 let selectedPhotoPointId = null;
 let cadPan = null;
 let suppressNextCadClick = false;
+let sessionStarting = false;
 let currentPhotoZoomRange = { min: 1, max: 1 };
 
 function renderHelp() {
@@ -230,12 +232,14 @@ function renderAreas() {
     }
   }
   const selectedArea = currentSelectedArea();
+  const canStartSession = canStartPointSession(project, selectedArea, sessionStarting);
+  startPointSessionBtn.disabled = !canStartSession;
   closeAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'open';
   reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
   areaState.textContent = area ? `Punto selezionato: ${area.name}. Le foto saranno archiviate qui.` : (selectedArea ? `Punto “${selectedArea.name}” chiuso. Riaprilo per aggiungere foto.` : (projectSelected ? 'Crea un punto foto sul layer.' : 'Seleziona prima un progetto.'));
   updateCaptureButton();
-  newSessionBtn.disabled = !(projectSelected && area);
+  newSessionBtn.disabled = !canStartSession;
   photoPointState.textContent = area ? `Punto selezionato: ${area.name}. Gli scatti successivi saranno associati a questo punto.` : 'Crea o seleziona un punto foto.';
   renderGallery();
   renderCad();
@@ -457,6 +461,25 @@ async function createSession(area = currentArea()) {
   session = await r.json();
   updateSessionUi();
   connectWs();
+}
+
+async function startSessionForSelectedPoint() {
+  const point = currentArea();
+  if (!point) { window.alert('Seleziona un punto foto aperto.'); return; }
+  sessionStarting = true;
+  startPointSessionBtn.textContent = 'Avvio sessione…';
+  renderAreas();
+  try {
+    await createSession(point);
+    captureState.textContent = `Rilievo avviato per “${point.name}”. Collega la camera tramite QR.`;
+    sessionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (error) {
+    window.alert(error.message);
+  } finally {
+    sessionStarting = false;
+    startPointSessionBtn.textContent = 'Avvia sessione';
+    renderAreas();
+  }
 }
 
 function updateSessionUi() {
@@ -762,11 +785,7 @@ cameraSelect.addEventListener('change', () => {
   connectionInfo.textContent = 'Cambio camera…';
 });
 
-newSessionBtn.addEventListener('click', async () => {
-  if (!projectSelect.value) { window.alert('Crea o seleziona prima un progetto.'); return; }
-  newSessionBtn.disabled = true;
-  try { await createSession(); renderAreas(); } finally { newSessionBtn.disabled = false; }
-});
+newSessionBtn.addEventListener('click', startSessionForSelectedPoint);
 
 copyLinkBtn.addEventListener('click', async () => {
   const text = cameraUrlEl.textContent;
@@ -809,6 +828,7 @@ downloadProjectBtn.addEventListener('click', async () => {
 projectSelect.addEventListener('change', () => { pendingPhotoPoint = null; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); updateProjectUi(); });
 
 areaSelect.addEventListener('change', () => { renderAreas(); publishActiveArea(); });
+startPointSessionBtn.addEventListener('click', startSessionForSelectedPoint);
 closeAreaBtn.addEventListener('click', () => {
   const area = currentArea();
   if (!area || !window.confirm(`Chiudere il punto foto “${area.name}”? Le foto resteranno nella sua cartella.`)) return;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint } from '../public/controller-model.js';
+import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, canStartPointSession, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
@@ -30,6 +30,10 @@ assert.equal(canCaptureArea({ name: 'Area nord' }, { project: 'Altro progetto' }
 assert.equal(canCaptureArea({ name: 'Area nord' }, { project: 'Rilievo 02' }, 'Rilievo 02', 'closed'), false);
 assert.equal(canDownloadProject('Rilievo 02'), true);
 assert.equal(canDownloadProject(''), false);
+assert.equal(canStartPointSession('Rilievo 02', { status: 'open' }), true);
+assert.equal(canStartPointSession('Rilievo 02', { status: 'closed' }), false);
+assert.equal(canStartPointSession('', { status: 'open' }), false);
+assert.equal(canStartPointSession('Rilievo 02', { status: 'open' }, true), false);
 const shapes = parseDxf('0\nLINE\n10\n0\n20\n0\n11\n20\n21\n10\n0\nEOF\n');
 assert.deepEqual(shapes, [{ type: 'line', x1: 0, y1: 0, x2: 20, y2: 10 }]);
 assert.ok(drawingBounds(shapes).width > 20);

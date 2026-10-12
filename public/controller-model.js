@@ -53,6 +53,10 @@ export function canDownloadProject(project) {
   return isProjectSelected(project);
 }
 
+export function canStartPointSession(project, point, isStarting = false) {
+  return Boolean(isProjectSelected(project) && point?.status === 'open' && !isStarting);
+}
+
 export function photoPointForProject(pointsByProject, project) {
   return Array.isArray(pointsByProject[project]) ? pointsByProject[project] : [];
 }
