@@ -1,7 +1,7 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { canCaptureArea, canCreateMappedArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, layerFileKind, layerValidationError, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
-import { createPhotoPoint, drawingBounds, parseDxf } from './cad-viewer.js';
+import { canCaptureArea, canDownloadProject, canManageAreas, createInterventionArea, createMappedInterventionArea, isProjectSelected, layerFileKind, layerValidationError, mappedAreaControlState, nextAreaName, nextProjectName, openAreaForProject, reopenInterventionArea } from './controller-model.js';
+import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
 import { createThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
@@ -93,6 +93,7 @@ let drawingArea = false;
 let pendingAreaVertices = [];
 let selectedPhotoPointId = null;
 let cadPan = null;
+let suppressNextCadClick = false;
 let currentPhotoZoomRange = { min: 1, max: 1 };
 
 function renderHelp() {
@@ -238,8 +239,9 @@ function updateProjectUi() {
   deleteCadBtn.disabled = !cad;
   addPhotoPointBtn.disabled = !drawableLayer;
   newMappedAreaBtn.disabled = !drawableLayer || !projectSelected;
-  completeMappedAreaBtn.disabled = !drawingArea || !canCreateMappedArea(pendingAreaVertices);
-  cancelMappedAreaBtn.disabled = !drawingArea;
+  const mappedAreaControls = mappedAreaControlState(drawingArea, pendingAreaVertices);
+  completeMappedAreaBtn.disabled = !mappedAreaControls.canComplete;
+  cancelMappedAreaBtn.disabled = !mappedAreaControls.canCancel;
   [zoomInCadBtn, zoomOutCadBtn, resetCadViewBtn].forEach(button => button.disabled = !drawableLayer);
   areaSection.setAttribute('aria-disabled', String(!projectSelected));
   [sessionSection, cameraQrSection].forEach(section => section.setAttribute('aria-disabled', String(!projectSelected)));
@@ -254,6 +256,9 @@ function projectPoints() { return photoPointsByProject[projectSelect.value] || [
 function projectAreas() { return areasByProject[projectSelect.value] || []; }
 
 function renderCad() {
+  const mappedAreaControls = mappedAreaControlState(drawingArea, pendingAreaVertices);
+  completeMappedAreaBtn.disabled = !mappedAreaControls.canComplete;
+  cancelMappedAreaBtn.disabled = !mappedAreaControls.canCancel;
   if ((!cadShapes.length && !layerImageUrl) || !cadBounds) {
     cadCanvas.innerHTML = '<span>▧</span><p>Area disegno layer</p>';
     return;
@@ -304,23 +309,35 @@ function renderCad() {
     const marker = document.createElementNS(svg.namespaceURI, 'circle'); marker.setAttribute('cx', point.x); marker.setAttribute('cy', -point.y); marker.setAttribute('r', Math.max(box.width, box.height) * .012); marker.setAttribute('class', `photo-marker${point.id === selectedPhotoPointId ? ' selected' : ''}`); marker.dataset.pointId = point.id; svg.append(marker);
   }
   svg.addEventListener('click', handleCadClick);
-  svg.addEventListener('pointerdown', event => { if (!event.target.closest('.photo-marker')) { cadPan = { x: event.clientX, y: event.clientY }; svg.setPointerCapture(event.pointerId); } });
+  svg.addEventListener('pointerdown', event => {
+    if (drawingArea || addingPhotoPoint || event.target.closest('.photo-marker, [data-area-id]')) return;
+    cadPan = { x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false };
+    svg.setPointerCapture(event.pointerId);
+  });
   svg.addEventListener('pointermove', handleCadPan);
-  svg.addEventListener('pointerup', () => { cadPan = null; renderCad(); });
+  svg.addEventListener('pointerup', () => {
+    suppressNextCadClick = Boolean(cadPan?.moved);
+    cadPan = null;
+    if (suppressNextCadClick) setTimeout(() => { suppressNextCadClick = false; }, 0);
+  });
+  svg.addEventListener('pointercancel', () => { cadPan = null; });
   cadCanvas.replaceChildren(svg);
   photoPointState.textContent = drawingArea ? `Area in disegno: ${pendingAreaVertices.length} punti. Aggiungi almeno 3 punti, poi conferma.` : (selectedPhotoPointId ? `Punto selezionato: ${projectPoints().find(point => point.id === selectedPhotoPointId)?.label}.` : 'Seleziona un’area o disegnane una nuova.');
 }
 
 function handleCadPan(event) {
   if (!cadPan || !cadView) return;
+  if (!cadPan.moved && !isPointerDrag(cadPan.startX, cadPan.startY, event.clientX, event.clientY)) return;
+  cadPan.moved = true;
   const rect = event.currentTarget.getBoundingClientRect();
   cadView = { ...cadView, x: cadView.x + (cadPan.x - event.clientX) * cadView.width / rect.width, y: cadView.y + (cadPan.y - event.clientY) * cadView.height / rect.height };
-  cadPan = { x: event.clientX, y: event.clientY };
+  cadPan = { ...cadPan, x: event.clientX, y: event.clientY };
   cadDrawingByProject[projectSelect.value].view = cadView;
   event.currentTarget.setAttribute('viewBox', `${cadView.x} ${cadView.y} ${cadView.width} ${cadView.height}`);
 }
 
 function handleCadClick(event) {
+  if (suppressNextCadClick) { suppressNextCadClick = false; return; }
   const areaNode = event.target.closest('[data-area-id]');
   if (areaNode && !drawingArea) { areaSelect.value = areaNode.dataset.areaId; renderAreas(); return; }
   const marker = event.target.closest('.photo-marker');
@@ -825,7 +842,7 @@ newMappedAreaBtn.addEventListener('click', () => {
   drawingArea = true; pendingAreaVertices = []; addingPhotoPoint = false; addPhotoPointBtn.classList.remove('active'); renderCad();
 });
 completeMappedAreaBtn.addEventListener('click', () => {
-  if (!canCreateMappedArea(pendingAreaVertices)) return;
+  if (!mappedAreaControlState(drawingArea, pendingAreaVertices).canComplete) return;
   const project = projectSelect.value; const areas = projectAreas();
   const name = nextAreaName(areas, window.prompt('Nome dell’area:', '') || '');
   if (!name) return;

@@ -31,3 +31,7 @@ export function drawingBounds(shapes) {
 export function createPhotoPoint(points, x, y) {
   return { id: crypto.randomUUID(), label: `Punto foto ${points.length + 1}`, x, y };
 }
+
+export function isPointerDrag(startX, startY, currentX, currentY, threshold = 4) {
+  return Math.hypot(currentX - startX, currentY - startY) >= threshold;
+}

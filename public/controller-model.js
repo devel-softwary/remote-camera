@@ -82,6 +82,13 @@ export function canCreateMappedArea(vertices) {
   return normalizeAreaVertices(vertices).length >= 3;
 }
 
+export function mappedAreaControlState(isDrawing, vertices) {
+  return {
+    canComplete: Boolean(isDrawing) && canCreateMappedArea(vertices),
+    canCancel: Boolean(isDrawing)
+  };
+}
+
 export function reopenInterventionArea(area) {
   if (!area || area.status !== 'closed') return false;
   area.status = 'open';
