@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, nextProjectName } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from '../public/cad-viewer.js';
 import { createSessionBinding, matchesSessionBinding } from '../session-policy.js';
-import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, mappedAreaControlState, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
+import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
 
@@ -54,9 +54,6 @@ assert.equal(openAreaForProject({ Progetto: [area] }, 'Progetto'), area);
 assert.deepEqual(normalizeAreaVertices([{ x: 1, y: 2 }, { x: '1', y: 2 }, null]), [{ x: 1, y: 2 }]);
 assert.equal(canCreateMappedArea([{ x: 0, y: 0 }, { x: 1, y: 0 }]), false);
 assert.equal(canCreateMappedArea([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]), true);
-assert.deepEqual(mappedAreaControlState(true, [{ x: 0, y: 0 }, { x: 1, y: 0 }]), { canComplete: false, canCancel: true });
-assert.deepEqual(mappedAreaControlState(true, [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]), { canComplete: true, canCancel: true });
-assert.deepEqual(mappedAreaControlState(false, [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]), { canComplete: false, canCancel: false });
 const mappedArea = createMappedInterventionArea([], 'Traliccio', [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 2 }]);
 assert.equal(mappedArea.vertices.length, 3);
 assert.equal(safeFolderName('Area 01'), 'Area 01');
