@@ -698,11 +698,14 @@ function renderGallery() {
       showStoredThumbnail(img, photo);
       const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const actions = document.createElement('div'); actions.className = 'gallery-actions';
-      const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary'; view.textContent = '👁 Visualizza'; view.setAttribute('aria-label', `Visualizza foto ${area.name}`); view.addEventListener('click', () => openPhotoViewer(photo, area.name));
-      const link = document.createElement('a'); link.className = 'gallery-action-link'; link.href = photo.url; link.download = ''; link.setAttribute('aria-label', `Scarica foto ${area.name}`);
+      const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary gallery-icon-button'; view.title = `Visualizza foto ${area.name}`; view.setAttribute('aria-label', view.title);
+      const viewIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); viewIcon.setAttribute('viewBox', '0 0 24 24'); viewIcon.setAttribute('aria-hidden', 'true'); viewIcon.setAttribute('focusable', 'false');
+      const viewOutline = document.createElementNS(viewIcon.namespaceURI, 'path'); viewOutline.setAttribute('d', 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12');
+      const viewPupil = document.createElementNS(viewIcon.namespaceURI, 'circle'); viewPupil.setAttribute('cx', '12'); viewPupil.setAttribute('cy', '12'); viewPupil.setAttribute('r', '3'); viewIcon.append(viewOutline, viewPupil); view.append(viewIcon); view.addEventListener('click', () => openPhotoViewer(photo, area.name));
+      const link = document.createElement('a'); link.className = 'gallery-action-link gallery-icon-button'; link.href = photo.url; link.download = ''; link.title = `Scarica foto ${area.name}`; link.setAttribute('aria-label', link.title);
       const downloadIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); downloadIcon.setAttribute('viewBox', '0 0 24 24'); downloadIcon.setAttribute('aria-hidden', 'true'); downloadIcon.setAttribute('focusable', 'false');
       const downloadPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); downloadPath.setAttribute('d', 'M12 3v11m0 0 4-4m-4 4-4-4m-3 7v3h14v-3'); downloadIcon.append(downloadPath);
-      link.append(downloadIcon, 'Scarica');
+      link.append(downloadIcon);
       actions.append(view, link); figure.append(img, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
