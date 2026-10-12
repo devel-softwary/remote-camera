@@ -118,3 +118,23 @@ export function linkPhotoPointsToAreas(points, areas) {
   }
   return changed;
 }
+
+export function renamePhotoPoint(points, areas, pointId, requestedName) {
+  const point = points.find(item => item.id === pointId);
+  if (!point) return false;
+  const name = nextPhotoPointName(points.filter(item => item.id !== pointId), requestedName);
+  if (!name) return false;
+  point.label = name;
+  const area = areas.find(item => item.id === point.areaId);
+  if (area) area.name = name;
+  return true;
+}
+
+export function removePhotoPoint(points, areas, pointId) {
+  const pointIndex = points.findIndex(item => item.id === pointId);
+  if (pointIndex < 0) return null;
+  const [point] = points.splice(pointIndex, 1);
+  const areaIndex = areas.findIndex(area => area.id === point.areaId && !points.some(item => item.areaId === area.id));
+  const area = areaIndex >= 0 ? areas.splice(areaIndex, 1)[0] : null;
+  return { point, area };
+}

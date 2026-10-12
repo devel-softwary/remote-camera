@@ -34,6 +34,10 @@ export function loadThumbnail(key) {
   return runTransaction('readonly', store => store.get(key));
 }
 
+export function deleteThumbnail(key) {
+  return runTransaction('readwrite', store => store.delete(key));
+}
+
 export async function createThumbnail(source, maxSide = 320) {
   const image = await createImage(source);
   const scale = Math.min(1, maxSide / Math.max(image.width, image.height));

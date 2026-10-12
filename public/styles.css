@@ -86,9 +86,14 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .sidebar-actions .danger { grid-column:span 2; }
 .photo-point-list { display:grid; gap:8px; max-height:260px; overflow:auto; }
 .photo-point-list .small { margin:0; }
-.photo-point-list-item { width:100%; min-height:40px; display:flex; justify-content:space-between; gap:8px; align-items:center; text-align:left; }
+.photo-point-list-item { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; align-items:center; border-radius:12px; }
 .photo-point-list-item.active { outline:2px solid #7694ff; background:#26375f; }
+.photo-point-select { min-width:0; min-height:40px; display:flex; justify-content:space-between; gap:8px; align-items:center; text-align:left; }
 .photo-point-list-status { color:#b8c0d9; font-size:.75rem; font-weight:500; }
+.photo-point-list-actions { display:flex; gap:4px; }
+.photo-point-list .point-action { width:34px; min-height:34px; border-radius:10px; }
+.point-action svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.point-action-delete { color:#ff9eaa; }
 .session-section button { width:100%; }
 .section-heading { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:12px; }
 .section-heading .small { margin:0; text-align:right; }

@@ -1,10 +1,10 @@
 import { loadConfig, wsUrl, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { canCaptureArea, canDownloadProject, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, reopenInterventionArea } from './controller-model.js';
+import { canCaptureArea, canDownloadProject, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink } from './session-links.js';
-import { createThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
+import { createThumbnail, deleteThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
@@ -170,6 +170,35 @@ function renderProjects() {
   updateProjectUi();
 }
 
+function createPointActionButton(label, className, pathData) {
+  const button = document.createElement('button'); button.type = 'button'; button.className = `secondary icon-button point-action ${className}`; button.setAttribute('aria-label', label); button.title = label;
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); icon.setAttribute('viewBox', '0 0 24 24'); icon.setAttribute('aria-hidden', 'true');
+  for (const data of pathData) { const path = document.createElementNS(icon.namespaceURI, 'path'); path.setAttribute('d', data); icon.append(path); }
+  button.append(icon);
+  return button;
+}
+
+function renameListedPhotoPoint(point, areas) {
+  const requestedName = window.prompt('Nuovo nome del punto foto:', point.label);
+  if (requestedName === null) return;
+  if (!renamePhotoPoint(projectPoints(), areas, point.id, requestedName)) { window.alert('Inserisci un nome univoco per il punto foto.'); return; }
+  saveWorkspace(); renderAreas(); publishActiveArea();
+}
+
+async function deleteListedPhotoPoint(point, areas) {
+  const area = areas.find(item => item.id === point.areaId);
+  if (captureRequestId && area?.id === areaSelect.value) { window.alert('Attendi il completamento dello scatto prima di eliminare il punto.'); return; }
+  const photoCount = area?.photos?.length || 0;
+  const detail = photoCount ? ` Contiene ${photoCount} foto: saranno rimosse dall’elenco, ma i file resteranno sul disco.` : '';
+  if (!window.confirm(`Eliminare il punto foto “${point.label}”?${detail}`)) return;
+  const removed = removePhotoPoint(projectPoints(), areas, point.id);
+  if (!removed) return;
+  if (selectedPhotoPointId === point.id) selectedPhotoPointId = null;
+  if (areaSelect.value === point.areaId) areaSelect.value = '';
+  await Promise.allSettled((removed.area?.photos || []).map(photo => photo.thumbnailKey ? deleteThumbnail(photo.thumbnailKey) : Promise.resolve()));
+  saveWorkspace(); renderAreas(); publishActiveArea();
+}
+
 function renderAreas() {
   const project = projectSelect.value;
   const projectSelected = isProjectSelected(project);
@@ -188,12 +217,16 @@ function renderAreas() {
   } else {
     for (const point of points) {
       const area = areas.find(item => item.id === point.areaId);
-      const button = document.createElement('button'); button.type = 'button'; button.className = `secondary photo-point-list-item${area?.id === areaSelect.value ? ' active' : ''}`; button.dataset.areaId = area?.id || ''; button.setAttribute('aria-pressed', String(area?.id === areaSelect.value));
+      const item = document.createElement('div'); item.className = `photo-point-list-item${area?.id === areaSelect.value ? ' active' : ''}`; item.setAttribute('role', 'listitem');
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary photo-point-select'; button.dataset.areaId = area?.id || ''; button.setAttribute('aria-pressed', String(area?.id === areaSelect.value));
       const name = document.createElement('span'); name.textContent = point.label;
       const status = document.createElement('span'); status.className = 'photo-point-list-status'; status.textContent = area?.status === 'closed' ? 'Chiuso' : `${area?.photos?.length || 0} foto`;
       button.append(name, status);
       button.addEventListener('click', () => { areaSelect.value = area.id; selectedPhotoPointId = point.id; renderAreas(); publishActiveArea(); });
-      photoPointList.append(button);
+      const actions = document.createElement('div'); actions.className = 'photo-point-list-actions';
+      const edit = createPointActionButton(`Rinomina ${point.label}`, 'point-action-edit', ['M4 20h4L19 9l-4-4L4 16v4', 'M13.5 6.5l4 4']); edit.addEventListener('click', () => renameListedPhotoPoint(point, areas));
+      const remove = createPointActionButton(`Elimina ${point.label}`, 'point-action-delete', ['M3 6h18', 'M8 6V4h8v2', 'M6 6l1 14h10l1-14', 'M10 10v6', 'M14 10v6']); remove.addEventListener('click', () => void deleteListedPhotoPoint(point, areas));
+      actions.append(edit, remove); item.append(button, actions); photoPointList.append(item);
     }
   }
   const selectedArea = currentSelectedArea();
@@ -614,7 +647,8 @@ function publishActiveArea() {
 }
 
 function renderGallery() {
-  const areas = areasByProject[projectSelect.value] || [];
+  const pointAreaIds = new Set(projectPoints().map(point => point.areaId));
+  const areas = (areasByProject[projectSelect.value] || []).filter(area => pointAreaIds.has(area.id));
   gallery.replaceChildren();
   if (!areas.some(area => area.photos?.length)) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
   for (const area of areas) {
