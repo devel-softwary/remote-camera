@@ -822,19 +822,22 @@ downloadProjectBtn.addEventListener('click', async () => {
       await createSession(authorizationArea);
       renderAreas();
     }
-    const response = await fetch(`/api/projects/${encodeURIComponent(project)}/download`, {
+    const response = await fetch(`/api/projects/${encodeURIComponent(project)}/download-ticket`, {
       method: 'POST',
       headers: { 'x-room': session.room, 'x-controller-token': session.controllerToken }
     });
     if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Download non riuscito');
-    const url = URL.createObjectURL(await response.blob());
+    const download = await response.json();
+    if (!download.url?.startsWith('/api/project-downloads/')) throw new Error('Link di download non valido.');
     const link = document.createElement('a');
-    link.href = url;
+    link.href = download.url;
     link.download = `${project}.zip`;
+    link.hidden = true;
+    document.body.append(link);
     link.click();
-    URL.revokeObjectURL(url);
+    link.remove();
   } catch (error) {
-    window.alert(error.message);
+    window.alert(error instanceof TypeError ? 'Impossibile contattare il server per preparare lo ZIP.' : error.message);
   } finally {
     downloadProjectBtn.textContent = originalLabel;
     updateProjectUi();

@@ -10,7 +10,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import archiver from 'archiver';
 import { createSessionBinding, matchesSessionBinding } from './session-policy.js';
 import { photoExtension, photoStorageDirectory, safeFolderName } from './storage-policy.js';
-import { canDownloadProject, projectArchiveName, projectArchiveRoot } from './project-download.js';
+import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
 import { mergeWorkspaces, readWorkspace, writeWorkspace } from './workspace-storage.js';
@@ -28,6 +28,7 @@ const workspaceFile = path.resolve(process.env.WORKSPACE_STORAGE_FILE || path.jo
 app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: false, maxAge: '1h' }));
 
 const sessions = new Map();
+const downloadTickets = new Map();
 const mobileCommandTypes = new Set(['capture', 'set-zoom', 'set-torch', 'autofocus', 'get-camera-info']);
 
 function token(bytes = 24) { return crypto.randomBytes(bytes).toString('base64url'); }
@@ -129,15 +130,15 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   res.status(201).json({ url: `/uploads/${encodeURIComponent(project)}/${encodeURIComponent(area)}/${filename}` });
 });
 
-app.post('/api/projects/:project/download', (req, res) => {
+function authorizedDownloadProject(req) {
   const project = safeFolderName(req.params.project);
   const room = String(req.get('x-room') || '').toUpperCase();
   const suppliedToken = String(req.get('x-controller-token') || '');
   const session = sessions.get(room);
-  if (!project || !canDownloadProject(session, project, suppliedToken, tokensEqual)) {
-    return res.status(401).json({ message: 'Download progetto non autorizzato.' });
-  }
+  return project && canDownloadProject(session, project, suppliedToken, tokensEqual) ? project : '';
+}
 
+function streamProjectArchive(res, project) {
   const projectDir = projectArchiveRoot(uploadsDir, project);
   if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
     return res.status(404).json({ message: 'Il progetto non contiene foto archiviate.' });
@@ -146,10 +147,32 @@ app.post('/api/projects/:project/download', (req, res) => {
   res.attachment(projectArchiveName(project));
   res.type('application/zip');
   const archive = archiver('zip', { zlib: { level: 9 } });
-  archive.on('error', () => res.destroy());
+  archive.on('warning', error => console.warn('Project archive warning:', error));
+  archive.on('error', error => { console.error('Project archive failed:', error); res.destroy(error); });
   archive.pipe(res);
   archive.directory(projectDir, project);
-  archive.finalize();
+  void archive.finalize();
+}
+
+app.post('/api/projects/:project/download-ticket', (req, res) => {
+  const project = authorizedDownloadProject(req);
+  if (!project) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
+  const projectDir = projectArchiveRoot(uploadsDir, project);
+  if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return res.status(404).json({ message: 'Il progetto non contiene foto archiviate.' });
+  const ticket = issueDownloadTicket(downloadTickets, project, () => token(24));
+  res.json({ url: `/api/project-downloads/${encodeURIComponent(ticket)}` });
+});
+
+app.get('/api/project-downloads/:ticket', (req, res) => {
+  const project = consumeDownloadTicket(downloadTickets, String(req.params.ticket || ''));
+  if (!project) return res.status(401).json({ message: 'Link di download non valido o scaduto.' });
+  return streamProjectArchive(res, project);
+});
+
+app.post('/api/projects/:project/download', (req, res) => {
+  const project = authorizedDownloadProject(req);
+  if (!project) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
+  return streamProjectArchive(res, project);
 });
 
 app.get('/api/qr', async (req, res) => {
