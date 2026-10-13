@@ -612,6 +612,9 @@ function handleDataChannel(e) {
       renderCameraInfo(msg);
       connectionInfo.textContent = `Camera attiva: ${msg.label || 'Camera'}`;
     }
+    else if (msg.type === 'photo-captured') {
+      if (isCurrentCapture(captureRequestId, msg.requestId)) captureState.textContent = 'Foto scattata. Preparazione invio…';
+    }
     else if (msg.type === 'photo-start') {
       if (!isCurrentCapture(captureRequestId, msg.requestId)) return;
       const area = currentSessionArea();

@@ -41,6 +41,7 @@ function createPeer() {
       if (typeof event.data !== 'string') return;
       let message; try { message = JSON.parse(event.data); } catch { return; }
       if (message.type === 'camera-info') renderCameraInfo(message);
+      else if (message.type === 'photo-captured') infoEl.textContent = 'Foto scattata. Invio in corso…';
       else if (message.type === 'command-error') { infoEl.textContent = `Errore: ${message.message}`; captureBtn.disabled = false; }
     };
   };

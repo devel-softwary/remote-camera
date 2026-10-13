@@ -1,5 +1,6 @@
 import { loadConfig, wsUrl, queryParam, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
+import { captureVideoFrame, encodeCapturedFrame } from './photo-capture.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -257,21 +258,6 @@ async function autofocus() {
   }
 }
 
-async function captureBlob() {
-  if (!currentTrack) throw new Error('Camera non attiva');
-  if ('ImageCapture' in window) {
-    try {
-      const ic = new ImageCapture(currentTrack);
-      return await ic.takePhoto();
-    } catch (e) { console.warn('takePhoto fallback', e); }
-  }
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth || currentTrack.getSettings().width || 1920;
-  canvas.height = video.videoHeight || currentTrack.getSettings().height || 1080;
-  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-  return new Promise((resolve, reject) => canvas.toBlob(b => b ? resolve(b) : reject(new Error('Impossibile creare JPEG')), 'image/jpeg', 0.97));
-}
-
 async function waitForBuffer() {
   if (dc.bufferedAmount < 1024 * 1024) return;
   await new Promise(resolve => {
@@ -286,13 +272,17 @@ async function sendPhoto(requestId) {
   if (photoBusy) throw new Error('Scatto già in corso');
   photoBusy = true;
   try {
-    const blob = await captureBlob();
+    const frame = captureVideoFrame(video, currentTrack);
+    sendData({ type: 'photo-captured', requestId, createdAt: frame.createdAt });
+    sendMobileData({ type: 'photo-captured', requestId, createdAt: frame.createdAt });
+    infoEl.textContent = 'Foto scattata. Preparazione invio…';
+    const { blob } = await encodeCapturedFrame(frame);
     const buffer = await blob.arrayBuffer();
     const chunkSize = 64 * 1024;
     const chunks = Math.ceil(buffer.byteLength / chunkSize);
     sendData({
       type: 'photo-start', requestId, mime: blob.type || 'image/jpeg', size: buffer.byteLength,
-      chunks, createdAt: new Date().toISOString(), width: currentTrack.getSettings().width, height: currentTrack.getSettings().height
+      chunks, createdAt: frame.createdAt, width: frame.width, height: frame.height
     });
     for (let offset = 0; offset < buffer.byteLength; offset += chunkSize) {
       await waitForBuffer();
