@@ -8,6 +8,7 @@ import { createThumbnail, deleteThumbnail, loadThumbnail, saveThumbnail, thumbna
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
+import { freezeVideoPreview } from './capture-preview.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -15,6 +16,9 @@ const qr = document.querySelector('#qr');
 const newSessionBtn = document.querySelector('#newSession');
 const copyLinkBtn = document.querySelector('#copyLink');
 const video = document.querySelector('#remoteVideo');
+const capturePreview = document.querySelector('#capturePreview');
+const capturePreviewCanvas = document.querySelector('#capturePreviewCanvas');
+const closeCapturePreviewBtn = document.querySelector('#closeCapturePreview');
 const statusEl = document.querySelector('#status');
 const connectionInfo = document.querySelector('#connectionInfo');
 const captureBtn = document.querySelector('#capture');
@@ -754,11 +758,13 @@ function openPhotoViewer(photo, areaName) {
 
 captureBtn.addEventListener('click', () => {
   if (!canStartCapture(canCapture(), captureRequestId)) return;
+  if (freezeVideoPreview(video, capturePreviewCanvas)) capturePreview.hidden = false;
   const requestId = `${Date.now()}-${++captureSeq}`;
   startCaptureRequest(requestId);
   captureState.textContent = 'Scatto full-resolution in corso…';
   sendData({ type: 'capture', requestId });
 });
+closeCapturePreviewBtn.addEventListener('click', () => { capturePreview.hidden = true; });
 
 helpButton.addEventListener('click', () => helpDialog.showModal());
 closeHelpBtn.addEventListener('click', () => helpDialog.close());

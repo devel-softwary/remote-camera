@@ -1,4 +1,5 @@
 import { loadConfig, queryParam, setStatus, wsUrl } from './common.js';
+import { freezeVideoPreview } from './capture-preview.js';
 
 const room = queryParam('room').toUpperCase();
 const token = queryParam('token');
@@ -7,6 +8,9 @@ const statusEl = document.querySelector('#status');
 const areaEl = document.querySelector('#area');
 const infoEl = document.querySelector('#info');
 const captureBtn = document.querySelector('#capture');
+const capturePreview = document.querySelector('#capturePreview');
+const capturePreviewCanvas = document.querySelector('#capturePreviewCanvas');
+const closeCapturePreviewBtn = document.querySelector('#closeCapturePreview');
 const zoom = document.querySelector('#zoom');
 const zoomValue = document.querySelector('#zoomValue');
 const torchBtn = document.querySelector('#torch');
@@ -65,7 +69,11 @@ async function connect() {
     else if (message.type === 'ice-candidate' && message.candidate) await pc.addIceCandidate(message.candidate);
   };
 }
-captureBtn.addEventListener('click', () => command('capture'));
+captureBtn.addEventListener('click', () => {
+  if (freezeVideoPreview(video, capturePreviewCanvas)) capturePreview.hidden = false;
+  command('capture');
+});
+closeCapturePreviewBtn.addEventListener('click', () => { capturePreview.hidden = true; });
 zoom.addEventListener('input', () => { zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`; command('set-zoom', { value: Number(zoom.value) }); });
 torchBtn.addEventListener('click', () => { torchOn = !torchOn; torchBtn.textContent = torchOn ? '🔦 Torcia ON' : '🔦 Torcia OFF'; command('set-torch', { value: torchOn }); });
 focusBtn.addEventListener('click', () => command('autofocus'));
