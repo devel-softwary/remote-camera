@@ -1,6 +1,7 @@
 import { loadConfig, wsUrl, queryParam, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
 import { captureVideoFrame, encodeCapturedFrame } from './photo-capture.js';
+import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -25,6 +26,9 @@ let cameraBusy = false;
 let centralOfferSent = false;
 let pendingCentralIceCandidates = [];
 let pendingMobileIceCandidates = [];
+let reconnectAttempt = 0;
+let reconnectTimer;
+let peerDisconnectTimer;
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -181,11 +185,11 @@ localCameraSelect.addEventListener('change', async () => {
 });
 
 function createPeer() {
-  if (pc) pc.close();
+  if (pc) { pc.onconnectionstatechange = null; pc.close(); }
   pendingCentralIceCandidates = [];
-  pc = new RTCPeerConnection({ iceServers: config.iceServers });
-  sender = pc.addTrack(currentTrack, stream);
-  dc = pc.createDataChannel('remote-control', { ordered: true });
+  const peer = pc = new RTCPeerConnection({ iceServers: config.iceServers });
+  sender = peer.addTrack(currentTrack, stream);
+  dc = peer.createDataChannel('remote-control', { ordered: true });
   dc.binaryType = 'arraybuffer';
   dc.bufferedAmountLowThreshold = 256 * 1024;
 
@@ -202,23 +206,35 @@ function createPeer() {
     catch (err) { sendData({ type: 'command-error', command: msg.type, requestId: msg.requestId, message: err.message }); }
   };
 
-  pc.onicecandidate = e => e.candidate && sendSignal({ type: 'ice-candidate', candidate: e.candidate });
-  pc.onconnectionstatechange = () => {
-    const s = pc.connectionState;
-    if (s === 'connected') setStatus(statusEl, 'Video collegato', 'ok');
-    else if (['failed', 'disconnected'].includes(s)) {
+  peer.onicecandidate = e => e.candidate && sendSignal({ type: 'ice-candidate', candidate: e.candidate });
+  peer.onconnectionstatechange = () => {
+    if (peer !== pc) return;
+    const s = peer.connectionState;
+    if (s === 'connected') {
+      if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+      peerDisconnectTimer = undefined;
+      setStatus(statusEl, 'Video collegato', 'ok');
+    } else if (s === 'failed') {
       setStatus(statusEl, webRtcFailureMessage(s), 'warn');
       infoEl.textContent = webRtcFailureMessage(s);
+      requestReconnect();
+    } else if (s === 'disconnected' && !peerDisconnectTimer) {
+      setStatus(statusEl, webRtcFailureMessage(s), 'warn');
+      infoEl.textContent = webRtcFailureMessage(s);
+      peerDisconnectTimer = setTimeout(() => {
+        peerDisconnectTimer = undefined;
+        if (peer === pc && peer.connectionState === 'disconnected') requestReconnect();
+      }, 5000);
     }
   };
 }
 
 function createMobilePeer() {
-  if (mobilePc) mobilePc.close();
+  if (mobilePc) { mobilePc.onconnectionstatechange = null; mobilePc.close(); }
   pendingMobileIceCandidates = [];
-  mobilePc = new RTCPeerConnection({ iceServers: config.iceServers });
-  mobileSender = mobilePc.addTrack(currentTrack, stream);
-  mobileDc = mobilePc.createDataChannel('remote-control', { ordered: true });
+  const peer = mobilePc = new RTCPeerConnection({ iceServers: config.iceServers });
+  mobileSender = peer.addTrack(currentTrack, stream);
+  mobileDc = peer.createDataChannel('remote-control', { ordered: true });
   mobileDc.binaryType = 'arraybuffer';
   mobileDc.onopen = () => publishCameraInfo();
   mobileDc.onmessage = async e => {
@@ -227,9 +243,9 @@ function createMobilePeer() {
     try { await handleCommand(msg); sendMobileData({ type: 'command-complete', command: msg.type, requestId: msg.requestId }); }
     catch (err) { sendMobileData({ type: 'command-error', command: msg.type, requestId: msg.requestId, message: err.message }); }
   };
-  mobilePc.onicecandidate = e => e.candidate && sendSignal({ type: 'ice-candidate', candidate: e.candidate, targetRole: 'controller-mobile' });
-  mobilePc.onconnectionstatechange = () => {
-    if (['failed', 'closed'].includes(mobilePc.connectionState)) { mobilePc = mobileDc = mobileSender = undefined; }
+  peer.onicecandidate = e => e.candidate && sendSignal({ type: 'ice-candidate', candidate: e.candidate, targetRole: 'controller-mobile' });
+  peer.onconnectionstatechange = () => {
+    if (peer === mobilePc && ['failed', 'closed'].includes(peer.connectionState)) { mobilePc = mobileDc = mobileSender = undefined; }
   };
 }
 
@@ -304,16 +320,55 @@ async function handleCommand(msg) {
   }
 }
 
+function resetPeerConnections() {
+  if (peerDisconnectTimer) clearTimeout(peerDisconnectTimer);
+  peerDisconnectTimer = undefined;
+  if (mobilePc) { mobilePc.onconnectionstatechange = null; mobilePc.close(); }
+  mobilePc = mobileDc = mobileSender = undefined;
+  centralOfferSent = false;
+  createPeer();
+}
+
+function requestReconnect() {
+  if (ws && [WebSocket.OPEN, WebSocket.CONNECTING].includes(ws.readyState)) ws.close(4000, 'Riconnessione trasporto');
+  else scheduleReconnect(0);
+}
+
+function scheduleReconnect(closeCode) {
+  if (!canRetryConnection(closeCode) || reconnectTimer) return;
+  const delay = reconnectDelay(reconnectAttempt++);
+  setStatus(statusEl, `Connessione persa. Nuovo tentativo tra ${Math.ceil(delay / 1000)} s`, 'warn');
+  infoEl.textContent = 'La camera resta attiva e si ricollegherà automaticamente.';
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = undefined;
+    connectWs();
+  }, delay);
+}
+
 function connectWs() {
-  ws = new WebSocket(wsUrl());
-  ws.onopen = () => sendSignal({ type: 'join', room, role: 'camera', token: authToken });
-  ws.onclose = e => setStatus(statusEl, e.code === 4003 ? 'Pairing non valido/scaduto' : 'Server disconnesso', 'warn');
-  ws.onerror = () => setStatus(statusEl, 'Errore WebSocket', 'warn');
-  ws.onmessage = async event => {
+  resetPeerConnections();
+  const socket = ws = new WebSocket(wsUrl());
+  socket.onopen = () => sendSignal({ type: 'join', room, role: 'camera', token: authToken });
+  socket.onclose = e => {
+    if (socket !== ws) return;
+    ws = undefined;
+    if (!canRetryConnection(e.code)) {
+      setStatus(statusEl, e.code === 4001 ? 'Camera sostituita da un altro dispositivo' : 'Pairing non valido/scaduto', 'warn');
+      return;
+    }
+    scheduleReconnect(e.code);
+  };
+  socket.onerror = () => setStatus(statusEl, 'Errore WebSocket', 'warn');
+  socket.onmessage = async event => {
+    if (socket !== ws) return;
     const msg = JSON.parse(event.data);
     try {
       if (msg.type === 'error') throw new Error(msg.message);
-      if (msg.type === 'joined') setStatus(statusEl, `Pairing ${msg.room} riuscito`, 'ok');
+      if (msg.type === 'joined') {
+        reconnectAttempt = 0;
+        setStatus(statusEl, `Pairing ${msg.room} riuscito`, 'ok');
+        infoEl.textContent = 'Camera collegata. Pronta per lo scatto.';
+      }
       else if (msg.type === 'session-status') {
         if (msg.controller && !centralOfferSent) { await sendOffer('controller-central'); centralOfferSent = true; }
         if (!msg.controller) centralOfferSent = false;
@@ -359,7 +414,6 @@ async function start() {
   }
   setStatus(statusEl, 'Camera attiva, collegamento in corso', 'warn');
   config = await loadConfig();
-  createPeer();
   connectWs();
   permissionCard.classList.add('hidden');
   infoEl.textContent = 'Camera avviata. In attesa del controller.';
