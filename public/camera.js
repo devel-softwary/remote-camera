@@ -26,6 +26,8 @@ const localFocusDistanceGroup = document.querySelector('#localFocusDistanceGroup
 const localFocusDistanceValue = document.querySelector('#localFocusDistanceValue');
 const localFlashMode = document.querySelector('#localFlashMode');
 const localDiagnostics = document.querySelector('#localDiagnostics');
+const cameraOptions = document.querySelector('#cameraOptions');
+const localSecondaryControls = document.querySelector('#localSecondaryControls');
 const localCaptureBtn = document.querySelector('#localCapture');
 const uploadImmediately = document.querySelector('#uploadImmediately');
 const syncLocalPhotosBtn = document.querySelector('#syncLocalPhotos');
@@ -35,7 +37,9 @@ const preferredCameraKey = 'remote-camera.preferredDeviceId';
 const room = queryParam('room').toUpperCase();
 const authToken = queryParam('token');
 const localMode = queryParam('local') === '1';
+document.body?.classList.toggle('local-mode', localMode);
 localControls.hidden = !localMode;
+if (localMode) localSecondaryControls.querySelector('summary').after(cameraOptions);
 if (localMode) infoEl.textContent = 'Avvia la fotocamera per iniziare il rilievo locale.';
 if (!window.isSecureContext) secureWarning.classList.remove('hidden');
 

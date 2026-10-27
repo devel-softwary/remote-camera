@@ -11,24 +11,33 @@
     <button id="start">Consenti camera e collega</button>
     <p id="secureWarning" class="notice small hidden">La camera richiede HTTPS (eccetto localhost).</p>
   </section>
-  <section class="card"><video id="localVideo" autoplay playsinline muted></video>
-    <label for="localCameraSelect">Fotocamera da trasmettere
-      <select id="localCameraSelect" disabled><option>Avvia prima la camera</option></select>
-    </label>
-    <p id="cameraHint" class="small">Se il video appare in bianco e nero, prova un'altra fotocamera: sui telefoni con sensori speciali potrebbe essere selezionata la camera notturna o a infrarossi. La scelta viene ricordata su questo browser.</p>
-    <p id="controlsInfo" class="small">Camera non avviata.</p><p id="info" class="small" aria-live="polite">I controlli saranno gestiti dal dispositivo remoto.</p></section>
-  <section id="localControls" class="card" hidden><h2>Rilievo con questo telefono</h2>
-    <label for="localAreaSelect">Punto foto<select id="localAreaSelect" disabled><option>Connessione in corso…</option></select></label>
-    <div class="control-grid">
+  <section class="card camera-preview-card"><video id="localVideo" autoplay playsinline muted></video>
+    <p id="info" class="small camera-live-info" aria-live="polite">I controlli saranno gestiti dal dispositivo remoto.</p>
+    <details id="cameraOptions" class="camera-options"><summary>Cambia fotocamera</summary>
+      <label for="localCameraSelect">Fotocamera da usare<select id="localCameraSelect" disabled><option>Avvia prima la camera</option></select></label>
+      <p id="cameraHint" class="small">Se il video appare in bianco e nero, prova un'altra fotocamera: sui telefoni con sensori speciali potrebbe essere selezionata la camera notturna o a infrarossi. La scelta viene ricordata su questo browser.</p>
+      <p id="controlsInfo" class="small">Camera non avviata.</p>
+    </details>
+  </section>
+  <section id="localControls" class="card local-field-controls" hidden>
+    <div class="section-heading"><h2>Scatto sul campo</h2><span class="small">Scegli il punto prima di scattare</span></div>
+    <label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Connessione in corso…</option></select></label>
+    <div class="local-primary-grid">
       <label id="localZoomGroup">Zoom <span id="localZoomValue" class="value">N/D</span><input id="localZoom" type="range" min="1" max="1" step="0.1" value="1" disabled></label>
-      <div class="button-control"><span>Illuminazione</span><button id="localTorch" class="secondary" type="button" disabled>🔦 Torcia OFF</button></div>
-      <div class="button-control"><span>Messa a fuoco</span><button id="localFocus" class="secondary" type="button" disabled>◎ Autofocus</button></div>
       <label id="localFocusDistanceGroup">Focus manuale <span id="localFocusDistanceValue" class="value">N/D</span><input id="localFocusDistance" type="range" disabled></label>
-      <label>Flash foto<select id="localFlashMode" disabled><option value="">N/D</option></select></label>
     </div>
-    <details><summary>Diagnostica fotocamera</summary><p id="localDiagnostics" class="small diagnostics">In attesa delle capacità della camera.</p></details>
-    <div class="capture-bar"><button id="localCapture" class="capture" type="button" disabled>📷 Scatta foto</button></div>
-    <label class="inline-option"><input id="uploadImmediately" type="checkbox"> Carica subito dopo lo scatto (usa dati)</label>
-    <div class="capture-bar"><button id="syncLocalPhotos" class="secondary" type="button" disabled>Sincronizza ora</button><span id="localQueueInfo" class="small">Nessuna foto in attesa.</span></div>
+    <div class="local-action-row">
+      <button id="localFocus" class="secondary" type="button" disabled>◎ Autofocus</button>
+      <button id="localCapture" class="capture local-capture" type="button" disabled>📷 Scatta foto</button>
+    </div>
+    <details id="localSecondaryControls" class="local-secondary-controls"><summary>Illuminazione e altre opzioni</summary>
+      <div class="control-grid">
+        <div class="button-control"><span>Illuminazione continua</span><button id="localTorch" class="secondary" type="button" disabled>🔦 Torcia OFF</button></div>
+        <label>Flash foto<select id="localFlashMode" disabled><option value="">N/D</option></select></label>
+      </div>
+      <label class="inline-option"><input id="uploadImmediately" type="checkbox"> Carica subito dopo lo scatto (usa dati)</label>
+      <div class="capture-bar"><button id="syncLocalPhotos" class="secondary" type="button" disabled>Sincronizza ora</button><span id="localQueueInfo" class="small">Nessuna foto in attesa.</span></div>
+      <h3>Diagnostica fotocamera</h3><p id="localDiagnostics" class="small diagnostics">In attesa delle capacità della camera.</p>
+    </details>
   </section>
 </main><script type="module" src="/camera.js"></script></body></html>

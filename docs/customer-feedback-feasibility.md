@@ -8,6 +8,7 @@ Data analisi: 24 ottobre 2026.
 - 27 ottobre 2026: completata Fase 2. Aggiunti dati strutturati del punto, gerarchia server Maradona, nome progressivo, deduplicazione degli upload e ZIP con radice `DAM`.
 - 27 ottobre 2026: completata Fase 3. Aggiunti uso con un solo telefono, controlli locali, coda offline persistente e upload manuale o immediato senza live remoto.
 - 27 ottobre 2026: completata Fase 4. Aggiunti diagnostica capability, focus manuale, touch-to-focus e flash fotografico condizionali.
+- 27 ottobre 2026: ottimizzata l'interfaccia locale per il rilievo: punto attivo, zoom, focus e scatto restano nel pannello operativo mobile; opzioni secondarie raccolte separatamente.
 
 ## Esito
 
