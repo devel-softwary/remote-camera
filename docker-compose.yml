@@ -12,6 +12,7 @@ services:
       TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
       PHOTO_STORAGE_DIR: /app/uploads
       WORKSPACE_STORAGE_FILE: /app/data/workspace.json
+      FIELD_SESSION_TTL_MS: ${FIELD_SESSION_TTL_MS:-604800000}
     ports:
       - "3000"
     networks:

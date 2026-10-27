@@ -63,6 +63,7 @@ const cancelPhotoPointBtn = document.querySelector('#cancelPhotoPoint');
 const areaSelect = document.querySelector('#areaSelect');
 const photoPointList = document.querySelector('#photoPointList');
 const startPointSessionBtn = document.querySelector('#startPointSession');
+const startLocalSessionBtn = document.querySelector('#startLocalSession');
 const closeAreaBtn = document.querySelector('#closeArea');
 const reopenAreaBtn = document.querySelector('#reopenArea');
 const areaState = document.querySelector('#areaState');
@@ -174,9 +175,11 @@ async function syncWorkspace() {
     updateProjectUi();
     syncWorkspaceBtn.textContent = 'Sincronizzato';
     setTimeout(() => { syncWorkspaceBtn.textContent = label; }, 1500);
+    return true;
   } catch (error) {
     window.alert(error.message);
     syncWorkspaceBtn.textContent = label;
+    return false;
   } finally { syncWorkspaceBtn.disabled = false; }
 }
 
@@ -250,6 +253,7 @@ function renderAreas() {
   const selectedArea = currentSelectedArea();
   const canStartSession = canStartPointSession(project, selectedArea, sessionStarting);
   startPointSessionBtn.disabled = !canStartSession;
+  startLocalSessionBtn.disabled = !canStartSession;
   closeAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'open';
   reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
@@ -495,10 +499,11 @@ async function restoreProjectLayer(project) {
 function sendSignal(msg) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg)); }
 function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(msg)); }
 
-async function createSession(area = currentArea()) {
+async function createSession(area = currentArea(), localMode = false) {
   if (!area) throw new Error('Seleziona un punto foto.');
   const workProfile = normalizeWorkProfile(projectProfilesByProject[projectSelect.value]);
-  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: projectSelect.value, area: area.name, workProfile, location: area.location }) });
+  const areas = (areasByProject[projectSelect.value] || []).filter(item => item.status === 'open').map(item => ({ name: item.name, location: item.location }));
+  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: projectSelect.value, area: area.name, workProfile, location: area.location, areas, localMode }) });
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'Impossibile creare la sessione');
   session = await r.json();
   updateSessionUi();
@@ -882,6 +887,18 @@ projectSelect.addEventListener('change', () => { pendingPhotoPoint = null; addin
 
 areaSelect.addEventListener('change', () => { renderAreas(); publishActiveArea(); });
 startPointSessionBtn.addEventListener('click', startSessionForSelectedPoint);
+startLocalSessionBtn.addEventListener('click', async () => {
+  const area = currentArea();
+  if (!area || !(await syncWorkspace())) return;
+  startLocalSessionBtn.disabled = true;
+  try {
+    await createSession(area, true);
+    location.assign(cameraSessionLink(config.baseUrl, session.room, session.cameraToken, true));
+  } catch (error) {
+    window.alert(error.message);
+    renderAreas();
+  }
+});
 closeAreaBtn.addEventListener('click', () => {
   const area = currentArea();
   if (!area || !window.confirm(`Chiudere il punto foto “${area.name}”? Le foto resteranno nella sua cartella.`)) return;

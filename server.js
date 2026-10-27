@@ -8,7 +8,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import archiver from 'archiver';
-import { createSessionBinding, createSessionStorageBinding, matchesSessionBinding } from './session-policy.js';
+import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding } from './session-policy.js';
 import { photoProjectStorageName, photoStorageDirectory, safeCaptureId, safeFolderName } from './storage-policy.js';
 import { savePhotoFile } from './photo-storage.js';
 import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
@@ -20,6 +20,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 10 * 60 * 1000);
+const FIELD_SESSION_TTL_MS = Number(process.env.FIELD_SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '512kb' }));
@@ -84,12 +85,36 @@ app.post('/api/workspace/sync', (req, res) => {
   }
 });
 
+function saveFieldPhotoMetadata(project, areaName, captureId, url, size) {
+  try {
+    const workspace = readWorkspace(workspaceFile);
+    const area = workspace.areasByProject[project]?.find(item => item.name === areaName);
+    if (!area) return;
+    area.photos ||= [];
+    if (area.photos.some(photo => photo.id === captureId || photo.url === url)) return;
+    area.photos.push({ id: captureId, url, size, createdAt: new Date().toISOString() });
+    writeWorkspace(workspaceFile, workspace);
+  } catch (error) { console.error('Field photo metadata failed:', error); }
+}
+
+function findFieldPhotoMetadata(project, areaName, captureId) {
+  try {
+    return readWorkspace(workspaceFile).areasByProject[project]
+      ?.find(item => item.name === areaName)?.photos?.find(photo => photo.id === captureId) || null;
+  } catch { return null; }
+}
+
 app.post('/api/session', (req, res) => {
   pruneSessions();
   const binding = createSessionBinding(safeFolderName(req.body?.project), safeFolderName(req.body?.area));
   const storageBinding = createSessionStorageBinding(req.body?.workProfile, req.body?.location);
   if (!binding) return res.status(400).json({ message: 'Progetto e area di intervento validi sono obbligatori.' });
   if (!storageBinding) return res.status(400).json({ message: 'Traliccio, faccia e nodo Maradona non validi.' });
+  const requestedAreas = createAllowedSessionAreas(binding.project, req.body?.areas, storageBinding.workProfile);
+  const activeArea = requestedAreas.find(item => item.name === binding.area) || { name: binding.area, location: storageBinding.location };
+  const allowedAreas = requestedAreas.length ? requestedAreas : [activeArea];
+  if (!allowedAreas.some(item => item.name === binding.area)) allowedAreas.unshift(activeArea);
+  const localMode = req.body?.localMode === true;
   let room;
   do { room = roomCode(); } while (sessions.has(room));
   const session = {
@@ -101,8 +126,10 @@ app.post('/api/session', (req, res) => {
     area: binding.area,
     workProfile: storageBinding.workProfile,
     location: storageBinding.location,
+    allowedAreas,
+    localMode,
     savedCaptures: new Map(),
-    expiresAt: Date.now() + SESSION_TTL_MS,
+    expiresAt: Date.now() + (localMode ? FIELD_SESSION_TTL_MS : SESSION_TTL_MS),
     camera: null,
     [CENTRAL_ROLE]: null,
     [MOBILE_ROLE]: null,
@@ -116,27 +143,33 @@ app.post('/api/session', (req, res) => {
     controllerToken: session.controllerToken,
     mobileControllerToken: session.mobileControllerToken,
     cameraToken: session.cameraToken,
+    localMode: session.localMode,
     expiresAt: new Date(session.expiresAt).toISOString()
   });
 });
 
 app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: '20mb' }), (req, res) => {
   const room = String(req.get('x-room') || '').toUpperCase();
-  const suppliedToken = String(req.get('x-controller-token') || '');
+  const suppliedControllerToken = String(req.get('x-controller-token') || '');
+  const suppliedCameraToken = String(req.get('x-camera-token') || '');
   const project = safeFolderName(req.get('x-project'));
   const area = safeFolderName(req.get('x-area'));
   const session = sessions.get(room);
-  if (!session || Date.now() >= session.expiresAt || !tokensEqual(session.controllerToken, suppliedToken)) return res.status(401).json({ message: 'Sessione non autorizzata.' });
-  if (!matchesSessionBinding(session, project, area)) return res.status(400).json({ message: 'La foto non appartiene al progetto e all’area della sessione.' });
+  const authorization = authorizePhotoUpload(session, { project, area, controllerToken: suppliedControllerToken, cameraToken: suppliedCameraToken }, tokensEqual);
+  if (!authorization) return res.status(401).json({ message: 'Sessione o punto foto non autorizzato.' });
   if (!req.body?.length) return res.status(400).json({ message: 'Foto non valida.' });
   const captureId = safeCaptureId(req.get('x-capture-id'));
   if (!captureId) return res.status(400).json({ message: 'Identificatore scatto non valido.' });
-  const captureKey = `${session.project}\0${session.area}\0${captureId}`;
+  const persisted = authorization.role === 'camera' ? findFieldPhotoMetadata(project, area, captureId) : null;
+  if (persisted) return res.status(200).json({ url: persisted.url });
+  const storageSession = authorization.role === 'camera' ? { ...session, area: authorization.area.name, location: authorization.area.location } : session;
+  const captureKey = `${session.project}\0${area}\0${captureId}`;
   const previous = session.savedCaptures.get(captureKey);
   if (previous) return res.status(200).json(previous);
   try {
-    const saved = savePhotoFile(uploadsDir, session, req.get('content-type'), req.body);
+    const saved = savePhotoFile(uploadsDir, storageSession, req.get('content-type'), req.body);
     session.savedCaptures.set(captureKey, saved);
+    if (authorization.role === 'camera') saveFieldPhotoMetadata(session.project, area, captureId, saved.url, req.body.length);
     res.status(201).json(saved);
   }
   catch (error) { console.error('Photo storage failed:', error); res.status(500).json({ message: 'Salvataggio foto non riuscito.' }); }
@@ -231,6 +264,8 @@ function sendSessionStatus(session) {
     controller: Boolean(session[CENTRAL_ROLE]),
     mobileController: Boolean(session[MOBILE_ROLE]),
     activeArea: session.activeArea,
+    project: session.project,
+    areas: session.localMode ? session.allowedAreas.map(area => ({ name: area.name })) : undefined,
     expiresAt: new Date(session.expiresAt).toISOString()
   };
   safeSend(session.camera, payload);
@@ -296,10 +331,12 @@ wss.on('connection', (ws) => {
         if (!msg.targetRole) return;
       } else msg.targetRole = ws.role;
       relayPeer(ws, { ...msg, from: ws.role });
-    } else if (msg.type === 'session-area' && ws.role === CENTRAL_ROLE) {
+    } else if (msg.type === 'session-area' && (ws.role === CENTRAL_ROLE || (ws.role === CAMERA_ROLE && session.localMode))) {
       const area = safeFolderName(msg.area);
       if (!area) return safeSend(ws, { type: 'command-error', message: 'Area di intervento non valida.' });
-      const storageBinding = createSessionStorageBinding(session.workProfile, msg.location);
+      const allowedArea = session.allowedAreas.find(item => item.name === area);
+      if (session.localMode && !allowedArea) return safeSend(ws, { type: 'command-error', message: 'Punto foto non autorizzato.' });
+      const storageBinding = allowedArea || createSessionStorageBinding(session.workProfile, msg.location);
       if (!storageBinding) return safeSend(ws, { type: 'command-error', message: 'Traliccio, faccia e nodo Maradona non validi.' });
       session.area = area;
       session.location = storageBinding.location;

@@ -6,7 +6,8 @@ Data analisi: 24 ottobre 2026.
 
 - 27 ottobre 2026: completata Fase 1. Aggiunti profili `generico | maradona`, migrazione dei progetti esistenti e validazione `TR01–TR28`, `A–D`, `N001–N100`.
 - 27 ottobre 2026: completata Fase 2. Aggiunti dati strutturati del punto, gerarchia server Maradona, nome progressivo, deduplicazione degli upload e ZIP con radice `DAM`.
-- Prossimo intervento: Fase 3, uso con un solo telefono.
+- 27 ottobre 2026: completata Fase 3. Aggiunti uso con un solo telefono, controlli locali, coda offline persistente e upload manuale o immediato senza live remoto.
+- Prossimo intervento: Fase 4, controlli camera avanzati e diagnostica capability.
 
 ## Esito
 
@@ -21,16 +22,16 @@ La soluzione consigliata mantiene due modalità:
 
 | Richiesta | Stato | Nota |
 |---|---|---|
-| Scatto dal telefono camera | Mancante | La pagina camera non ha il comando locale. |
+| Scatto dal telefono camera | Implementato | Disponibile tramite **Usa questo telefono**. |
 | Zoom, torcia e autofocus | Parziale | Sono già presenti sui controller. Appaiono solo se browser e sensore dichiarano la capability. |
 | Flash fotografico | Mancante | La torcia attuale è luce continua. Non equivale al flash sincronizzato. |
 | Messa a fuoco manuale/touch | Mancante | È disponibile solo la richiesta di autofocus. |
-| Struttura Maradona | Mancante | Oggi il server salva in `progetto/area`. |
-| Nome file richiesto | Mancante | Oggi usa timestamp e valore casuale. |
-| Salvataggio foto sul server | Automatico | Avviene dopo ogni scatto riuscito. |
+| Struttura Maradona | Implementata | Usa `DAM/TRxx/FACCIA/Nxxx`. |
+| Nome file richiesto | Implementato | Il server assegna il progressivo. |
+| Salvataggio foto sul server | Configurabile | Remoto: automatico. Un solo telefono: manuale o immediato. |
 | Sincronizzazione progetti/aree | Manuale | Avviene premendo **Sincronizza**. |
 | Download ZIP | Su richiesta | Il server crea lo ZIP. I byte arrivano al dispositivo che avvia il download. |
-| Copia locale sul telefono | Mancante | Restano solo dati e miniature nel browser del controller. |
+| Copia locale sul telefono | Parziale | La coda IndexedDB conserva gli originali fino all'upload; non è una cartella pubblica o microSD. |
 
 ## Modalità “Un solo telefono”
 

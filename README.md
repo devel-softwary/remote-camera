@@ -9,6 +9,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - stanza con codice casuale
 - QR code per aprire direttamente la camera del telefono
 - secondo QR per un controller mobile concorrente
+- modalità con un solo telefono, senza streaming remoto
 - camera anteriore/posteriore
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
@@ -16,6 +17,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - profilo Maradona con archivio `DAM/TRxx/<faccia>/Nxxx` e filename progressivo
 - layer immagine o CAD per posizionare i punti foto sulla planimetria
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
+- coda foto sul telefono con upload manuale o immediato
 - download ZIP dell'intero progetto dal controller, con struttura per area
 - STUN incluso; TURN configurabile via variabili d'ambiente
 
@@ -91,6 +93,8 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 5. Scatta le foto: vengono archiviate nel punto foto attivo. Lo stesso QR può riconnettere il dispositivo fino alla scadenza.
 6. Per un'altra area, selezionala nel controller: la camera resta connessa e le foto finiscono nella rispettiva cartella.
 7. Con la sessione aperta, seleziona il progetto e premi **Scarica ZIP** per salvarne tutte le foto sul computer del browser.
+
+Per lavorare senza secondo dispositivo, seleziona un punto e premi **Usa questo telefono**. Ogni scatto entra prima nella coda locale. Premi **Sincronizza ora** quando vuoi usare la rete, oppure abilita **Carica subito**.
 
 ## Limiti del POC
 

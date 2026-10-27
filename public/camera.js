@@ -2,6 +2,7 @@ import { loadConfig, wsUrl, queryParam, setStatus, formatBytes } from './common.
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
 import { captureVideoFrame, encodeCapturedFrame } from './photo-capture.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
+import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -12,10 +13,24 @@ const startBtn = document.querySelector('#start');
 const controlsInfo = document.querySelector('#controlsInfo');
 const localCameraSelect = document.querySelector('#localCameraSelect');
 const cameraHint = document.querySelector('#cameraHint');
+const localControls = document.querySelector('#localControls');
+const localAreaSelect = document.querySelector('#localAreaSelect');
+const localZoom = document.querySelector('#localZoom');
+const localZoomGroup = document.querySelector('#localZoomGroup');
+const localZoomValue = document.querySelector('#localZoomValue');
+const localTorchBtn = document.querySelector('#localTorch');
+const localFocusBtn = document.querySelector('#localFocus');
+const localCaptureBtn = document.querySelector('#localCapture');
+const uploadImmediately = document.querySelector('#uploadImmediately');
+const syncLocalPhotosBtn = document.querySelector('#syncLocalPhotos');
+const localQueueInfo = document.querySelector('#localQueueInfo');
 const preferredCameraKey = 'remote-camera.preferredDeviceId';
 
 const room = queryParam('room').toUpperCase();
 const authToken = queryParam('token');
+const localMode = queryParam('local') === '1';
+localControls.hidden = !localMode;
+if (localMode) infoEl.textContent = 'Avvia la fotocamera per iniziare il rilievo locale.';
 if (!window.isSecureContext) secureWarning.classList.remove('hidden');
 
 let config, ws, pc, dc, mobilePc, mobileDc, stream, currentTrack, sender, mobileSender;
@@ -29,6 +44,10 @@ let pendingMobileIceCandidates = [];
 let reconnectAttempt = 0;
 let reconnectTimer;
 let peerDisconnectTimer;
+let localProject = '';
+let localActiveArea = '';
+let localTorchOn = false;
+let localSyncBusy = false;
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -89,11 +108,28 @@ function capabilitiesPayload() {
   };
 }
 
+function renderLocalCameraInfo(payload) {
+  if (!localMode) return;
+  const controls = payload.controls || {};
+  const cameraZoom = controls.zoom;
+  if (cameraZoom) {
+    localZoom.min = cameraZoom.min; localZoom.max = cameraZoom.max; localZoom.step = cameraZoom.step || 0.1; localZoom.value = cameraZoom.value ?? cameraZoom.min;
+    localZoomValue.textContent = `${Number(localZoom.value).toFixed(1)}×`;
+    localZoom.disabled = false; localZoomGroup.classList.remove('disabled-control');
+  } else {
+    localZoom.disabled = true; localZoomGroup.classList.add('disabled-control'); localZoomValue.textContent = 'N/D';
+  }
+  localTorchBtn.disabled = !controls.torch;
+  localFocusBtn.disabled = !(controls.focusModes || []).length;
+  localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
+}
+
 function publishCameraInfo() {
   renderCameraSelect();
   const payload = capabilitiesPayload();
   sendData({ type: 'camera-info', ...payload });
   sendMobileData({ type: 'camera-info', ...payload });
+  renderLocalCameraInfo(payload);
   const s = payload.settings || {};
   controlsInfo.textContent = `${payload.label || 'Camera'} • ${s.width || '?'}×${s.height || '?'}${s.frameRate ? ` • ${Math.round(s.frameRate)} fps` : ''}`;
 }
@@ -309,6 +345,102 @@ async function sendPhoto(requestId) {
   } finally { photoBusy = false; }
 }
 
+async function refreshLocalQueue() {
+  if (!localMode) return;
+  try {
+    const records = localProject ? await listQueuedPhotosForProject(localProject) : await listQueuedPhotos(room);
+    const summary = queuedPhotoSummary(records);
+    localQueueInfo.textContent = summary.count
+      ? `${summary.count} foto in attesa • ${formatBytes(summary.bytes)}`
+      : 'Nessuna foto in attesa.';
+    syncLocalPhotosBtn.disabled = localSyncBusy || !summary.count;
+  } catch {
+    localQueueInfo.textContent = 'Archivio locale non disponibile.';
+    syncLocalPhotosBtn.disabled = true;
+  }
+}
+
+async function uploadLocalPhoto(record) {
+  const response = await fetch('/api/photos', {
+    method: 'POST',
+    headers: {
+      'content-type': record.blob.type || 'image/jpeg', 'x-room': room, 'x-camera-token': authToken,
+      'x-project': localProject, 'x-area': record.area, 'x-capture-id': record.id
+    },
+    body: record.blob
+  });
+  if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Upload non riuscito.');
+  await deleteQueuedPhoto(record.id);
+  return response.json();
+}
+
+async function syncLocalPhotos() {
+  if (!localMode || localSyncBusy) return;
+  let records;
+  try { records = localProject ? await listQueuedPhotosForProject(localProject) : await listQueuedPhotos(room); }
+  catch { infoEl.textContent = 'Archivio locale non disponibile.'; return; }
+  const summary = queuedPhotoSummary(records);
+  if (!records.length) return refreshLocalQueue();
+  if (!window.confirm(`Sincronizzare ${summary.count} foto (${formatBytes(summary.bytes)}) usando la connessione attuale?`)) return;
+  localSyncBusy = true;
+  syncLocalPhotosBtn.disabled = true;
+  try {
+    for (const record of records) {
+      infoEl.textContent = `Invio ${record.area} • ${formatBytes(record.size)}…`;
+      await uploadLocalPhoto(record);
+    }
+    infoEl.textContent = records.length ? `${records.length} foto sincronizzate.` : 'Nessuna foto da sincronizzare.';
+  } catch (error) {
+    infoEl.textContent = `Foto conservate sul telefono: ${error.message}`;
+  } finally {
+    localSyncBusy = false;
+    await refreshLocalQueue();
+  }
+}
+
+async function captureLocalPhoto() {
+  if (!localMode || photoBusy || cameraBusy || !localProject || !localActiveArea) return;
+  photoBusy = true;
+  localCaptureBtn.disabled = true;
+  try {
+    const frame = captureVideoFrame(video, currentTrack);
+    infoEl.textContent = 'Foto scattata. Salvataggio locale…';
+    const { blob } = await encodeCapturedFrame(frame);
+    const record = createQueuedPhoto({
+      id: crypto.randomUUID(), room, project: localProject, area: localActiveArea,
+      blob, createdAt: frame.createdAt, width: frame.width, height: frame.height
+    });
+    await queuePhoto(record);
+    infoEl.textContent = `Foto salvata sul telefono • ${formatBytes(blob.size)}`;
+    await refreshLocalQueue();
+    if (uploadImmediately.checked) {
+      infoEl.textContent = 'Caricamento foto…';
+      await uploadLocalPhoto(record);
+      infoEl.textContent = `Foto caricata in “${record.area}”.`;
+      await refreshLocalQueue();
+    }
+  } catch (error) {
+    infoEl.textContent = `Errore scatto: ${error.message}`;
+  } finally {
+    photoBusy = false;
+    localCaptureBtn.disabled = !currentTrack || !localActiveArea;
+  }
+}
+
+function renderLocalSession(message) {
+  if (!localMode) return;
+  localProject = message.project || localProject;
+  localActiveArea = message.activeArea || localActiveArea;
+  const areas = Array.isArray(message.areas) ? message.areas : [];
+  if (areas.length) {
+    localAreaSelect.replaceChildren(...areas.map(area => new Option(area.name, area.name)));
+    localAreaSelect.disabled = false;
+  }
+  localAreaSelect.value = areas.some(area => area.name === localActiveArea) ? localActiveArea : localAreaSelect.value;
+  localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
+  void refreshLocalQueue();
+}
+
 async function handleCommand(msg) {
   switch (msg.type) {
     case 'capture': return sendPhoto(msg.requestId);
@@ -326,7 +458,7 @@ function resetPeerConnections() {
   if (mobilePc) { mobilePc.onconnectionstatechange = null; mobilePc.close(); }
   mobilePc = mobileDc = mobileSender = undefined;
   centralOfferSent = false;
-  createPeer();
+  if (!localMode) createPeer();
 }
 
 function requestReconnect() {
@@ -348,7 +480,7 @@ function scheduleReconnect(closeCode) {
 function connectWs() {
   resetPeerConnections();
   const socket = ws = new WebSocket(wsUrl());
-  socket.onopen = () => sendSignal({ type: 'join', room, role: 'camera', token: authToken });
+  socket.onopen = () => sendSignal({ type: 'join', room, role: 'camera', token: authToken, localMode });
   socket.onclose = e => {
     if (socket !== ws) return;
     ws = undefined;
@@ -367,13 +499,16 @@ function connectWs() {
       if (msg.type === 'joined') {
         reconnectAttempt = 0;
         setStatus(statusEl, `Pairing ${msg.room} riuscito`, 'ok');
-        infoEl.textContent = 'Camera collegata. Pronta per lo scatto.';
+        infoEl.textContent = localMode ? 'Modalità locale pronta.' : 'Camera collegata. Pronta per lo scatto.';
       }
       else if (msg.type === 'session-status') {
-        if (msg.controller && !centralOfferSent) { await sendOffer('controller-central'); centralOfferSent = true; }
-        if (!msg.controller) centralOfferSent = false;
-        if (msg.mobileController && !mobilePc) { createMobilePeer(); await sendOffer('controller-mobile'); }
-        if (!msg.mobileController && mobilePc) { mobilePc.close(); mobilePc = mobileDc = mobileSender = undefined; }
+        renderLocalSession(msg);
+        if (!localMode) {
+          if (msg.controller && !centralOfferSent) { await sendOffer('controller-central'); centralOfferSent = true; }
+          if (!msg.controller) centralOfferSent = false;
+          if (msg.mobileController && !mobilePc) { createMobilePeer(); await sendOffer('controller-mobile'); }
+          if (!msg.mobileController && mobilePc) { mobilePc.close(); mobilePc = mobileDc = mobileSender = undefined; }
+        }
       } else if (msg.type === 'webrtc-answer') {
         const peer = msg.from === 'controller-mobile' ? mobilePc : pc;
         const pendingCandidates = msg.from === 'controller-mobile' ? pendingMobileIceCandidates : pendingCentralIceCandidates;
@@ -413,10 +548,14 @@ async function start() {
     await openCamera();
   }
   setStatus(statusEl, 'Camera attiva, collegamento in corso', 'warn');
-  config = await loadConfig();
+  config = localMode ? { iceServers: [] } : await loadConfig();
   connectWs();
   permissionCard.classList.add('hidden');
-  infoEl.textContent = 'Camera avviata. In attesa del controller.';
+  if (localMode) {
+    void navigator.storage?.persist?.();
+    await refreshLocalQueue();
+  }
+  infoEl.textContent = localMode ? 'Camera avviata. Connessione al lavoro…' : 'Camera avviata. In attesa del controller.';
 }
 
 function startupErrorMessage(err) {
@@ -433,6 +572,33 @@ function startupErrorMessage(err) {
       return err.message || 'Avvio non riuscito. Riprova.';
   }
 }
+
+localAreaSelect.addEventListener('change', () => {
+  localActiveArea = localAreaSelect.value;
+  localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
+  sendSignal({ type: 'session-area', area: localActiveArea });
+});
+localZoom.addEventListener('input', async () => {
+  localZoomValue.textContent = `${Number(localZoom.value).toFixed(1)}×`;
+  try { await applyAdvanced({ zoom: Number(localZoom.value) }); }
+  catch (error) { infoEl.textContent = `Zoom non disponibile: ${error.message}`; }
+});
+localTorchBtn.addEventListener('click', async () => {
+  localTorchOn = !localTorchOn;
+  try {
+    await applyAdvanced({ torch: localTorchOn });
+    localTorchBtn.textContent = localTorchOn ? '🔦 Torcia ON' : '🔦 Torcia OFF';
+  } catch (error) {
+    localTorchOn = !localTorchOn;
+    infoEl.textContent = `Torcia non disponibile: ${error.message}`;
+  }
+});
+localFocusBtn.addEventListener('click', async () => {
+  try { await autofocus(); infoEl.textContent = 'Autofocus richiesto.'; }
+  catch (error) { infoEl.textContent = error.message; }
+});
+localCaptureBtn.addEventListener('click', captureLocalPhoto);
+syncLocalPhotosBtn.addEventListener('click', syncLocalPhotos);
 
 startBtn.addEventListener('click', async () => {
   if (startBtn.disabled) return;

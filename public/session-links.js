@@ -1,7 +1,8 @@
-export function cameraSessionLink(baseUrl, room, token) {
+export function cameraSessionLink(baseUrl, room, token, localMode = false) {
   const url = new URL('/camera.html', baseUrl);
   url.searchParams.set('room', room);
   url.searchParams.set('token', token);
+  if (localMode) url.searchParams.set('local', '1');
   return url.toString();
 }
 
