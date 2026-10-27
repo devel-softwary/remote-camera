@@ -67,8 +67,8 @@ export function nextAreaName(areas, requestedName) {
   return areas.some(area => area.name.toLocaleLowerCase() === name.toLocaleLowerCase()) ? '' : name;
 }
 
-export function createInterventionArea(areas, name) {
-  return { id: crypto.randomUUID(), name, status: 'open', photos: [] };
+export function createInterventionArea(areas, name, location = null) {
+  return { id: crypto.randomUUID(), name, status: 'open', photos: [], ...(location ? { location } : {}) };
 }
 
 export function createMappedInterventionArea(areas, name, vertices) {
@@ -114,10 +114,11 @@ export function linkPhotoPointsToAreas(points, areas) {
     let area = areas.find(item => item.id === point.areaId);
     if (!area) area = areas.find(item => String(item.name || '').toLocaleLowerCase() === label.toLocaleLowerCase());
     if (!area) {
-      area = createInterventionArea(areas, label);
+      area = createInterventionArea(areas, label, point.location);
       areas.push(area);
       changed = true;
     }
+    if (!area.location && point.location) { area.location = point.location; changed = true; }
     if (point.areaId !== area.id) { point.areaId = area.id; changed = true; }
   }
   return changed;

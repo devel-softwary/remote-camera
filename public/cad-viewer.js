@@ -28,8 +28,11 @@ export function drawingBounds(shapes) {
   return { x: x - pad, y: y - pad, width: width + 2 * pad, height: height + 2 * pad };
 }
 
-export function createPhotoPoint(points, x, y, name = '') {
-  return { id: crypto.randomUUID(), label: String(name || '').trim() || `Punto foto ${points.length + 1}`, x, y };
+export function createPhotoPoint(points, x, y, name = '', location = null) {
+  return {
+    id: crypto.randomUUID(), label: String(name || '').trim() || `Punto foto ${points.length + 1}`, x, y,
+    ...(location ? { location } : {})
+  };
 }
 
 export function isPointerDrag(startX, startY, currentX, currentY, threshold = 4) {

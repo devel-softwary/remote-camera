@@ -8,8 +8,9 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import archiver from 'archiver';
-import { createSessionBinding, matchesSessionBinding } from './session-policy.js';
-import { photoExtension, photoStorageDirectory, safeFolderName } from './storage-policy.js';
+import { createSessionBinding, createSessionStorageBinding, matchesSessionBinding } from './session-policy.js';
+import { photoProjectStorageName, photoStorageDirectory, safeCaptureId, safeFolderName } from './storage-policy.js';
+import { savePhotoFile } from './photo-storage.js';
 import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
@@ -86,7 +87,9 @@ app.post('/api/workspace/sync', (req, res) => {
 app.post('/api/session', (req, res) => {
   pruneSessions();
   const binding = createSessionBinding(safeFolderName(req.body?.project), safeFolderName(req.body?.area));
+  const storageBinding = createSessionStorageBinding(req.body?.workProfile, req.body?.location);
   if (!binding) return res.status(400).json({ message: 'Progetto e area di intervento validi sono obbligatori.' });
+  if (!storageBinding) return res.status(400).json({ message: 'Traliccio, faccia e nodo Maradona non validi.' });
   let room;
   do { room = roomCode(); } while (sessions.has(room));
   const session = {
@@ -96,6 +99,9 @@ app.post('/api/session', (req, res) => {
     cameraToken: token(),
     project: binding.project,
     area: binding.area,
+    workProfile: storageBinding.workProfile,
+    location: storageBinding.location,
+    savedCaptures: new Map(),
     expiresAt: Date.now() + SESSION_TTL_MS,
     camera: null,
     [CENTRAL_ROLE]: null,
@@ -123,11 +129,17 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   if (!session || Date.now() >= session.expiresAt || !tokensEqual(session.controllerToken, suppliedToken)) return res.status(401).json({ message: 'Sessione non autorizzata.' });
   if (!matchesSessionBinding(session, project, area)) return res.status(400).json({ message: 'La foto non appartiene al progetto e all’area della sessione.' });
   if (!req.body?.length) return res.status(400).json({ message: 'Foto non valida.' });
-  const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${photoExtension(req.get('content-type'))}`;
-  const folder = path.join(uploadsDir, project, area);
-  fs.mkdirSync(folder, { recursive: true, mode: 0o750 });
-  fs.writeFileSync(path.join(folder, filename), req.body, { mode: 0o640 });
-  res.status(201).json({ url: `/uploads/${encodeURIComponent(project)}/${encodeURIComponent(area)}/${filename}` });
+  const captureId = safeCaptureId(req.get('x-capture-id'));
+  if (!captureId) return res.status(400).json({ message: 'Identificatore scatto non valido.' });
+  const captureKey = `${session.project}\0${session.area}\0${captureId}`;
+  const previous = session.savedCaptures.get(captureKey);
+  if (previous) return res.status(200).json(previous);
+  try {
+    const saved = savePhotoFile(uploadsDir, session, req.get('content-type'), req.body);
+    session.savedCaptures.set(captureKey, saved);
+    res.status(201).json(saved);
+  }
+  catch (error) { console.error('Photo storage failed:', error); res.status(500).json({ message: 'Salvataggio foto non riuscito.' }); }
 });
 
 function authorizedDownloadProject(req) {
@@ -135,31 +147,33 @@ function authorizedDownloadProject(req) {
   const room = String(req.get('x-room') || '').toUpperCase();
   const suppliedToken = String(req.get('x-controller-token') || '');
   const session = sessions.get(room);
-  return project && canDownloadProject(session, project, suppliedToken, tokensEqual) ? project : '';
+  return project && canDownloadProject(session, project, suppliedToken, tokensEqual)
+    ? { project, storageProject: photoProjectStorageName(session) }
+    : null;
 }
 
-function streamProjectArchive(res, project) {
-  const projectDir = projectArchiveRoot(uploadsDir, project);
+function streamProjectArchive(res, storageProject) {
+  const projectDir = projectArchiveRoot(uploadsDir, storageProject);
   if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
     return res.status(404).json({ message: 'Il progetto non contiene foto archiviate.' });
   }
 
-  res.attachment(projectArchiveName(project));
+  res.attachment(projectArchiveName(storageProject));
   res.type('application/zip');
   const archive = archiver('zip', { zlib: { level: 9 } });
   archive.on('warning', error => console.warn('Project archive warning:', error));
   archive.on('error', error => { console.error('Project archive failed:', error); res.destroy(error); });
   archive.pipe(res);
-  archive.directory(projectDir, project);
+  archive.directory(projectDir, storageProject);
   void archive.finalize();
 }
 
 app.post('/api/projects/:project/download-ticket', (req, res) => {
-  const project = authorizedDownloadProject(req);
-  if (!project) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
-  const projectDir = projectArchiveRoot(uploadsDir, project);
+  const authorization = authorizedDownloadProject(req);
+  if (!authorization) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
+  const projectDir = projectArchiveRoot(uploadsDir, authorization.storageProject);
   if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) return res.status(404).json({ message: 'Il progetto non contiene foto archiviate.' });
-  const ticket = issueDownloadTicket(downloadTickets, project, () => token(24));
+  const ticket = issueDownloadTicket(downloadTickets, authorization.storageProject, () => token(24));
   res.json({ url: `/api/project-downloads/${encodeURIComponent(ticket)}` });
 });
 
@@ -170,9 +184,9 @@ app.get('/api/project-downloads/:ticket', (req, res) => {
 });
 
 app.post('/api/projects/:project/download', (req, res) => {
-  const project = authorizedDownloadProject(req);
-  if (!project) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
-  return streamProjectArchive(res, project);
+  const authorization = authorizedDownloadProject(req);
+  if (!authorization) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
+  return streamProjectArchive(res, authorization.storageProject);
 });
 
 app.get('/api/qr', async (req, res) => {
@@ -285,7 +299,10 @@ wss.on('connection', (ws) => {
     } else if (msg.type === 'session-area' && ws.role === CENTRAL_ROLE) {
       const area = safeFolderName(msg.area);
       if (!area) return safeSend(ws, { type: 'command-error', message: 'Area di intervento non valida.' });
+      const storageBinding = createSessionStorageBinding(session.workProfile, msg.location);
+      if (!storageBinding) return safeSend(ws, { type: 'command-error', message: 'Traliccio, faccia e nodo Maradona non validi.' });
       session.area = area;
+      session.location = storageBinding.location;
       session.activeArea = area;
       sendSessionStatus(session);
     } else if (msg.type === 'photo-saved' && ws.role === CENTRAL_ROLE) {

@@ -7,6 +7,9 @@ const controllerJs = await readFile(new URL('../public/controller.js', import.me
 assert.match(controllerHtml, /id="addPhotoPoint"/);
 assert.match(controllerHtml, /id="photoPointName"[^>]*maxlength="80"/);
 assert.match(controllerHtml, /id="photoPointNameForm"/);
+assert.match(controllerHtml, /id="maradonaTower"[^>]*max="28"/);
+assert.match(controllerHtml, /id="maradonaFace"/);
+assert.match(controllerHtml, /id="maradonaNode"[^>]*max="100"/);
 assert.match(controllerHtml, /<h2>Punto foto<\/h2>/);
 assert.match(controllerHtml, /id="photoPointList"/);
 assert.match(controllerHtml, /id="startPointSession"[^>]*>Avvia sessione<\/button>/);

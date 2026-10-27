@@ -5,7 +5,8 @@ Data analisi: 24 ottobre 2026.
 ## Stato implementazione
 
 - 27 ottobre 2026: completata Fase 1. Aggiunti profili `generico | maradona`, migrazione dei progetti esistenti e validazione `TR01–TR28`, `A–D`, `N001–N100`.
-- Prossimo intervento: Fase 2, naming e archivio server.
+- 27 ottobre 2026: completata Fase 2. Aggiunti dati strutturati del punto, gerarchia server Maradona, nome progressivo, deduplicazione degli upload e ZIP con radice `DAM`.
+- Prossimo intervento: Fase 3, uso con un solo telefono.
 
 ## Esito
 

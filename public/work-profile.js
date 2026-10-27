@@ -25,3 +25,8 @@ export function normalizeMaradonaLocation(location) {
     node: `N${String(node).padStart(3, '0')}`
   };
 }
+
+export function maradonaPointName(location) {
+  const normalized = normalizeMaradonaLocation(location);
+  return normalized ? `${normalized.tower}_${normalized.face}_${normalized.node}` : '';
+}

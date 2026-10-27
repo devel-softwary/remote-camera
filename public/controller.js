@@ -9,7 +9,7 @@ import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
 import { freezeVideoPreview } from './capture-preview.js';
-import { GENERIC_WORK_PROFILE, normalizeWorkProfile } from './work-profile.js';
+import { GENERIC_WORK_PROFILE, MARADONA_WORK_PROFILE, maradonaPointName, normalizeMaradonaLocation, normalizeWorkProfile } from './work-profile.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -53,7 +53,12 @@ const zoomOutCadBtn = document.querySelector('#zoomOutCad');
 const resetCadViewBtn = document.querySelector('#resetCadView');
 const photoPointState = document.querySelector('#photoPointState');
 const photoPointNameForm = document.querySelector('#photoPointNameForm');
+const genericPointNameField = document.querySelector('#genericPointNameField');
 const photoPointName = document.querySelector('#photoPointName');
+const maradonaPointFields = document.querySelector('#maradonaPointFields');
+const maradonaTower = document.querySelector('#maradonaTower');
+const maradonaFace = document.querySelector('#maradonaFace');
+const maradonaNode = document.querySelector('#maradonaNode');
 const cancelPhotoPointBtn = document.querySelector('#cancelPhotoPoint');
 const areaSelect = document.querySelector('#areaSelect');
 const photoPointList = document.querySelector('#photoPointList');
@@ -322,7 +327,14 @@ function updateProjectUi() {
 function projectPoints() { return photoPointsByProject[projectSelect.value] || []; }
 function renderCad() {
   const pendingPoint = pendingPhotoPoint?.project === projectSelect.value ? pendingPhotoPoint : null;
+  const isMaradona = normalizeWorkProfile(projectProfilesByProject[projectSelect.value]).type === MARADONA_WORK_PROFILE;
   photoPointNameForm.hidden = !pendingPoint;
+  genericPointNameField.hidden = isMaradona;
+  maradonaPointFields.hidden = !isMaradona;
+  photoPointName.required = !isMaradona;
+  maradonaTower.disabled = !isMaradona;
+  maradonaFace.disabled = !isMaradona;
+  maradonaNode.disabled = !isMaradona;
   if ((!cadShapes.length && !layerImageUrl) || !cadBounds) {
     cadCanvas.innerHTML = '<span>▧</span><p>Layer punti foto</p>';
     return;
@@ -415,8 +427,11 @@ function beginPhotoPoint(x, y) {
   addPhotoPointBtn.classList.remove('active');
   photoPointName.value = '';
   photoPointName.setCustomValidity('');
+  maradonaTower.value = '';
+  maradonaFace.value = 'A';
+  maradonaNode.value = '';
   renderCad();
-  requestAnimationFrame(() => photoPointName.focus());
+  requestAnimationFrame(() => (maradonaPointFields.hidden ? photoPointName : maradonaTower).focus());
 }
 
 function changeCadZoom(factor) {
@@ -482,8 +497,9 @@ function sendData(msg) { if (dc?.readyState === 'open') dc.send(JSON.stringify(m
 
 async function createSession(area = currentArea()) {
   if (!area) throw new Error('Seleziona un punto foto.');
-  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: projectSelect.value, area: area.name }) });
-  if (!r.ok) throw new Error('Impossibile creare la sessione');
+  const workProfile = normalizeWorkProfile(projectProfilesByProject[projectSelect.value]);
+  const r = await fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ project: projectSelect.value, area: area.name, workProfile, location: area.location }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'Impossibile creare la sessione');
   session = await r.json();
   updateSessionUi();
   connectWs();
@@ -671,7 +687,7 @@ function finishPhoto() {
 async function savePhoto(blob, meta, selectedArea) {
   if (!selectedArea || selectedArea.status !== 'open') throw new Error('Il punto foto non è più aperto.');
   photoUploadAbortController = new AbortController();
-  const response = await fetch('/api/photos', { method: 'POST', signal: photoUploadAbortController.signal, headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name }, body: blob });
+  const response = await fetch('/api/photos', { method: 'POST', signal: photoUploadAbortController.signal, headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name, 'x-capture-id': meta.requestId }, body: blob });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Salvataggio non riuscito');
   const saved = await response.json();
   if (!isCurrentCapture(captureRequestId, meta.requestId)) return;
@@ -695,7 +711,7 @@ function publishActiveArea() {
   if (!area || !session || session.project !== projectSelect.value) return;
   session.area = area.name;
   expiryEl.textContent = `${session.project} • ${session.area} • QR valido fino alle ${new Date(session.expiresAt).toLocaleTimeString()}.`;
-  sendSignal({ type: 'session-area', area: area.name });
+  sendSignal({ type: 'session-area', area: area.name, location: area.location });
 }
 
 function renderGallery() {
@@ -980,14 +996,24 @@ photoPointNameForm.addEventListener('submit', event => {
   event.preventDefault();
   if (!pendingPhotoPoint || pendingPhotoPoint.project !== projectSelect.value) return;
   const points = projectPoints();
-  const name = nextPhotoPointName(points, photoPointName.value);
+  const isMaradona = normalizeWorkProfile(projectProfilesByProject[projectSelect.value]).type === MARADONA_WORK_PROFILE;
+  const location = isMaradona ? normalizeMaradonaLocation({ tower: maradonaTower.value, face: maradonaFace.value, node: maradonaNode.value }) : null;
+  if (isMaradona && !location) {
+    window.alert('Inserisci traliccio da 1 a 28, faccia da A a D e nodo da 1 a 100.');
+    return;
+  }
+  const name = nextPhotoPointName(points, isMaradona ? maradonaPointName(location) : photoPointName.value);
   if (!name) {
+    if (isMaradona) {
+      window.alert('Questo nodo è già presente nel progetto.');
+      return;
+    }
     photoPointName.setCustomValidity('Inserisci un nome univoco per il punto foto.');
     photoPointName.reportValidity();
     return;
   }
   photoPointName.setCustomValidity('');
-  const photoPoint = createPhotoPoint(points, pendingPhotoPoint.x, pendingPhotoPoint.y, name);
+  const photoPoint = createPhotoPoint(points, pendingPhotoPoint.x, pendingPhotoPoint.y, name, location);
   (photoPointsByProject[pendingPhotoPoint.project] ||= []).push(photoPoint);
   linkPhotoPointsToAreas(photoPointsByProject[pendingPhotoPoint.project], areasByProject[pendingPhotoPoint.project] ||= []);
   areaSelect.value = photoPoint.areaId;

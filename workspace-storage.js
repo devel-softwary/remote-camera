@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { normalizeWorkProfile } from './public/work-profile.js';
+import { normalizeMaradonaLocation, normalizeWorkProfile } from './public/work-profile.js';
 
 const MAX_PROJECTS = 500;
 const MAX_AREAS_PER_PROJECT = 500;
@@ -14,10 +14,12 @@ function isSafeName(value) {
 function cloneArea(area) {
   const name = isSafeName(area?.name);
   if (!name) return null;
+  const location = normalizeMaradonaLocation(area?.location);
   return {
     id: typeof area.id === 'string' && area.id.length <= 100 ? area.id : crypto.randomUUID(),
     name,
     status: area.status === 'closed' ? 'closed' : 'open',
+    ...(location ? { location } : {}),
     ...(Array.isArray(area.vertices) ? { vertices: area.vertices.filter(point => Number.isFinite(point?.x) && Number.isFinite(point?.y)).slice(0, 1000).map(point => ({ x: point.x, y: point.y })) } : {}),
     ...(Array.isArray(area.photos) ? { photos: area.photos.map(clonePhoto).filter(Boolean).slice(0, 1000) } : {})
   };

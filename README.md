@@ -12,7 +12,8 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - camera anteriore/posteriore
 - scatto remoto
 - `ImageCapture.takePhoto()` quando supportato, con fallback a frame JPEG dal video
-- punti foto nominati, con scatti archiviati in `uploads/<progetto>/<punto-foto>`
+- punti foto nominati, con scatti generici in `uploads/<progetto>/<punto-foto>`
+- profilo Maradona con archivio `DAM/TRxx/<faccia>/Nxxx` e filename progressivo
 - layer immagine o CAD per posizionare i punti foto sulla planimetria
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
 - download ZIP dell'intero progetto dal controller, con struttura per area
@@ -65,7 +66,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Le foto vengono scritte automaticamente in `./uploads/<progetto>/<area>` sul computer host. Per l'avvio senza Docker, imposta `PHOTO_STORAGE_DIR` con un percorso assoluto, oppure usa la cartella `uploads` del progetto.
+Le foto generiche vengono scritte in `./uploads/<progetto>/<area>`. Quelle Maradona usano `./uploads/DAM/TRxx/<faccia>/Nxxx`. Per l'avvio senza Docker, imposta `PHOTO_STORAGE_DIR` con un percorso assoluto, oppure usa la cartella `uploads` del progetto.
 
 Il container usa `PUID` e `PGID` per salvare le foto con l'utente host. Impostali in `.env` con `id -u` e `id -g`. Per correggere file già creati come root, esegui una volta `sudo chown -R $(id -u):$(id -g) uploads` e riavvia il container.
 
