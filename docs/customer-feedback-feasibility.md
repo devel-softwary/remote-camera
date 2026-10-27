@@ -7,7 +7,7 @@ Data analisi: 24 ottobre 2026.
 - 27 ottobre 2026: completata Fase 1. Aggiunti profili `generico | maradona`, migrazione dei progetti esistenti e validazione `TR01–TR28`, `A–D`, `N001–N100`.
 - 27 ottobre 2026: completata Fase 2. Aggiunti dati strutturati del punto, gerarchia server Maradona, nome progressivo, deduplicazione degli upload e ZIP con radice `DAM`.
 - 27 ottobre 2026: completata Fase 3. Aggiunti uso con un solo telefono, controlli locali, coda offline persistente e upload manuale o immediato senza live remoto.
-- Prossimo intervento: Fase 4, controlli camera avanzati e diagnostica capability.
+- 27 ottobre 2026: completata Fase 4. Aggiunti diagnostica capability, focus manuale, touch-to-focus e flash fotografico condizionali.
 
 ## Esito
 
@@ -23,9 +23,9 @@ La soluzione consigliata mantiene due modalità:
 | Richiesta | Stato | Nota |
 |---|---|---|
 | Scatto dal telefono camera | Implementato | Disponibile tramite **Usa questo telefono**. |
-| Zoom, torcia e autofocus | Parziale | Sono già presenti sui controller. Appaiono solo se browser e sensore dichiarano la capability. |
-| Flash fotografico | Mancante | La torcia attuale è luce continua. Non equivale al flash sincronizzato. |
-| Messa a fuoco manuale/touch | Mancante | È disponibile solo la richiesta di autofocus. |
+| Zoom, torcia e autofocus | Implementato | Appaiono solo se browser e sensore dichiarano la capability. |
+| Flash fotografico | Implementato con limite | Usa `ImageCapture.takePhoto()` solo quando il browser espone le modalità flash. La torcia resta un controllo distinto. |
+| Messa a fuoco manuale/touch | Implementato con limite | I controlli appaiono solo quando dichiarati dal browser. |
 | Struttura Maradona | Implementata | Usa `DAM/TRxx/FACCIA/Nxxx`. |
 | Nome file richiesto | Implementato | Il server assegna il progressivo. |
 | Salvataggio foto sul server | Configurabile | Remoto: automatico. Un solo telefono: manuale o immediato. |
@@ -62,10 +62,12 @@ Interventi:
 1. riusare i controlli esistenti anche nella pagina camera;
 2. aggiungere focus manuale e touch-to-focus solo quando esposti;
 3. distinguere chiaramente **Torcia** da **Flash**;
-4. aggiungere una schermata diagnostica con browser, sensore e capability;
+4. aggiungere una schermata diagnostica con sensore e capability;
 5. provare sui modelli Android/iPhone realmente usati dal cliente.
 
 Per controlli coerenti su tutti i telefoni, flash incluso, serve una app nativa. La web app non può garantirli.
+
+La matrice di collaudo è in [camera-device-matrix.md](camera-device-matrix.md).
 
 Riferimento: [W3C MediaStream Image Capture](https://www.w3.org/TR/image-capture/).
 
@@ -187,4 +189,4 @@ Impegno: **medio**.
 
 ## Decisione consigliata
 
-Implementare prima le fasi 1–3 nella web app. Coprono struttura, scatto con un solo telefono e consumo dati ridotto. Valutare l'app Android solo se microSD e controlli camera uniformi sono requisiti obbligatori.
+Le quattro fasi web sono implementate. Collaudare ora i telefoni reali del cliente. Valutare l'app Android solo se microSD e controlli camera uniformi sono requisiti obbligatori.

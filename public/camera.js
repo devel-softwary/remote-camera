@@ -1,6 +1,7 @@
 import { loadConfig, wsUrl, queryParam, setStatus, formatBytes } from './common.js';
 import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage } from './webrtc-ice.js';
-import { captureVideoFrame, encodeCapturedFrame } from './photo-capture.js';
+import { capturePhoto, captureVideoFrame } from './photo-capture.js';
+import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
 
@@ -20,6 +21,11 @@ const localZoomGroup = document.querySelector('#localZoomGroup');
 const localZoomValue = document.querySelector('#localZoomValue');
 const localTorchBtn = document.querySelector('#localTorch');
 const localFocusBtn = document.querySelector('#localFocus');
+const localFocusDistance = document.querySelector('#localFocusDistance');
+const localFocusDistanceGroup = document.querySelector('#localFocusDistanceGroup');
+const localFocusDistanceValue = document.querySelector('#localFocusDistanceValue');
+const localFlashMode = document.querySelector('#localFlashMode');
+const localDiagnostics = document.querySelector('#localDiagnostics');
 const localCaptureBtn = document.querySelector('#localCapture');
 const uploadImmediately = document.querySelector('#uploadImmediately');
 const syncLocalPhotosBtn = document.querySelector('#syncLocalPhotos');
@@ -48,6 +54,8 @@ let localProject = '';
 let localActiveArea = '';
 let localTorchOn = false;
 let localSyncBusy = false;
+let photoCapabilities = {};
+let flashMode = 'off';
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -99,12 +107,7 @@ function capabilitiesPayload() {
     activeDeviceId: settings.deviceId || currentDeviceId,
     label: currentTrack.label,
     settings,
-    controls: {
-      zoom: cap.zoom ? { min: cap.zoom.min, max: cap.zoom.max, step: cap.zoom.step || 0.1, value: settings.zoom ?? cap.zoom.min } : null,
-      torch: Array.isArray(cap.torch) ? cap.torch.includes(true) : Boolean(cap.torch),
-      focusModes: cap.focusMode || [],
-      focusDistance: cap.focusDistance ? { min: cap.focusDistance.min, max: cap.focusDistance.max, step: cap.focusDistance.step || 0.01 } : null
-    }
+    controls: { ...normalizeCameraControls(cap, settings, navigator.mediaDevices.getSupportedConstraints?.() || {}, photoCapabilities), flashMode }
   };
 }
 
@@ -121,6 +124,19 @@ function renderLocalCameraInfo(payload) {
   }
   localTorchBtn.disabled = !controls.torch;
   localFocusBtn.disabled = !(controls.focusModes || []).length;
+  const focusDistance = controls.focusDistance;
+  const manualFocus = focusDistance && controls.focusModes?.includes('manual');
+  if (manualFocus) {
+    localFocusDistance.min = focusDistance.min; localFocusDistance.max = focusDistance.max; localFocusDistance.step = focusDistance.step; localFocusDistance.value = focusDistance.value;
+    localFocusDistanceValue.textContent = Number(focusDistance.value).toFixed(2);
+  }
+  localFocusDistance.disabled = !manualFocus;
+  localFocusDistanceGroup.classList.toggle('disabled-control', !manualFocus);
+  localFlashMode.replaceChildren(...(controls.flashModes || []).map(mode => new Option(mode, mode)));
+  localFlashMode.value = controls.flashModes?.includes(flashMode) ? flashMode : (controls.flashModes?.[0] || '');
+  localFlashMode.disabled = !(controls.flashModes || []).length;
+  localDiagnostics.textContent = cameraDiagnostics(payload);
+  video.classList.toggle('touch-focus', Boolean(controls.pointsOfInterest));
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
 }
 
@@ -168,6 +184,12 @@ async function openCamera(deviceId = '') {
   }
   stream = nextStream;
   currentTrack = nextTrack;
+  photoCapabilities = {};
+  if (typeof window.ImageCapture === 'function') {
+    try { photoCapabilities = await new window.ImageCapture(currentTrack).getPhotoCapabilities(); } catch { photoCapabilities = {}; }
+  }
+  const availableFlashModes = Array.isArray(photoCapabilities.fillLightMode) ? photoCapabilities.fillLightMode : [];
+  flashMode = availableFlashModes.includes(flashMode) ? flashMode : (availableFlashModes[0] || '');
   currentDeviceId = nextTrack.getSettings().deviceId || deviceId;
   video.muted = true;
   video.playsInline = true;
@@ -310,6 +332,23 @@ async function autofocus() {
   }
 }
 
+async function setFocusDistance(value) {
+  const cap = currentTrack?.getCapabilities?.() || {};
+  if (!cap.focusMode?.includes('manual') || !cap.focusDistance) throw new Error('Messa a fuoco manuale non supportata');
+  const distance = Number(value);
+  if (!Number.isFinite(distance) || distance < cap.focusDistance.min || distance > cap.focusDistance.max) throw new Error('Distanza di messa a fuoco non valida');
+  await applyAdvanced({ focusMode: 'manual', focusDistance: distance });
+}
+
+async function focusAtPoint(x, y) {
+  const controls = capabilitiesPayload().controls;
+  if (!controls.pointsOfInterest) throw new Error('Touch-to-focus non supportato');
+  const point = { x: Math.min(1, Math.max(0, Number(x))), y: Math.min(1, Math.max(0, Number(y))) };
+  if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('Punto di messa a fuoco non valido');
+  const focusMode = controls.focusModes.includes('single-shot') ? 'single-shot' : 'continuous';
+  await applyAdvanced({ pointsOfInterest: [point], focusMode });
+}
+
 async function waitForBuffer() {
   if (dc.bufferedAmount < 1024 * 1024) return;
   await new Promise(resolve => {
@@ -328,7 +367,7 @@ async function sendPhoto(requestId) {
     sendData({ type: 'photo-captured', requestId, createdAt: frame.createdAt });
     sendMobileData({ type: 'photo-captured', requestId, createdAt: frame.createdAt });
     infoEl.textContent = 'Foto scattata. Preparazione invio…';
-    const { blob } = await encodeCapturedFrame(frame);
+    const { blob } = await capturePhoto(frame, currentTrack, flashMode ? { fillLightMode: flashMode } : {}, window.ImageCapture);
     const buffer = await blob.arrayBuffer();
     const chunkSize = 64 * 1024;
     const chunks = Math.ceil(buffer.byteLength / chunkSize);
@@ -405,7 +444,7 @@ async function captureLocalPhoto() {
   try {
     const frame = captureVideoFrame(video, currentTrack);
     infoEl.textContent = 'Foto scattata. Salvataggio locale…';
-    const { blob } = await encodeCapturedFrame(frame);
+    const { blob } = await capturePhoto(frame, currentTrack, flashMode ? { fillLightMode: flashMode } : {}, window.ImageCapture);
     const record = createQueuedPhoto({
       id: crypto.randomUUID(), room, project: localProject, area: localActiveArea,
       blob, createdAt: frame.createdAt, width: frame.width, height: frame.height
@@ -447,6 +486,14 @@ async function handleCommand(msg) {
     case 'set-zoom': return applyAdvanced({ zoom: Number(msg.value) });
     case 'set-torch': return applyAdvanced({ torch: Boolean(msg.value) });
     case 'autofocus': return autofocus();
+    case 'set-focus-distance': return setFocusDistance(msg.value);
+    case 'focus-at-point': return focusAtPoint(msg.x, msg.y);
+    case 'set-flash-mode': {
+      const modes = capabilitiesPayload().controls.flashModes || [];
+      if (!modes.includes(msg.value)) throw new Error('Modalità flash non supportata');
+      flashMode = msg.value;
+      return publishCameraInfo();
+    }
     case 'switch-camera': await switchCamera(String(msg.deviceId || '')); return;
     case 'get-camera-info': return publishCameraInfo();
   }
@@ -595,6 +642,21 @@ localTorchBtn.addEventListener('click', async () => {
 });
 localFocusBtn.addEventListener('click', async () => {
   try { await autofocus(); infoEl.textContent = 'Autofocus richiesto.'; }
+  catch (error) { infoEl.textContent = error.message; }
+});
+localFocusDistance.addEventListener('input', () => {
+  localFocusDistanceValue.textContent = Number(localFocusDistance.value).toFixed(2);
+});
+localFocusDistance.addEventListener('change', async () => {
+  try { await setFocusDistance(localFocusDistance.value); }
+  catch (error) { infoEl.textContent = error.message; }
+});
+localFlashMode.addEventListener('change', () => { flashMode = localFlashMode.value; publishCameraInfo(); });
+video.addEventListener('click', async event => {
+  if (!localMode || !capabilitiesPayload().controls.pointsOfInterest) return;
+  const point = normalizedVideoPoint(event.clientX, event.clientY, video.getBoundingClientRect(), video.videoWidth, video.videoHeight);
+  if (!point) return;
+  try { await focusAtPoint(point.x, point.y); infoEl.textContent = 'Messa a fuoco sul punto richiesta.'; }
   catch (error) { infoEl.textContent = error.message; }
 });
 localCaptureBtn.addEventListener('click', captureLocalPhoto);

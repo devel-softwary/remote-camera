@@ -19,3 +19,15 @@ export async function encodeCapturedFrame(frame, defer = () => new Promise(resol
   });
   return { ...frame, blob };
 }
+
+export async function capturePhoto(frame, track, settings = {}, ImageCaptureCtor = globalThis.ImageCapture) {
+  if (typeof ImageCaptureCtor === 'function') {
+    try {
+      const blob = await new ImageCaptureCtor(track).takePhoto(settings);
+      if (blob) return { ...frame, blob, nativeCapture: true };
+    } catch (error) {
+      if (settings.fillLightMode === 'flash') throw new Error(`Flash fotografico non disponibile: ${error.message}`);
+    }
+  }
+  return { ...await encodeCapturedFrame(frame), nativeCapture: false };
+}

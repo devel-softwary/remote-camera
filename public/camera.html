@@ -23,7 +23,10 @@
       <label id="localZoomGroup">Zoom <span id="localZoomValue" class="value">N/D</span><input id="localZoom" type="range" min="1" max="1" step="0.1" value="1" disabled></label>
       <div class="button-control"><span>Illuminazione</span><button id="localTorch" class="secondary" type="button" disabled>🔦 Torcia OFF</button></div>
       <div class="button-control"><span>Messa a fuoco</span><button id="localFocus" class="secondary" type="button" disabled>◎ Autofocus</button></div>
+      <label id="localFocusDistanceGroup">Focus manuale <span id="localFocusDistanceValue" class="value">N/D</span><input id="localFocusDistance" type="range" disabled></label>
+      <label>Flash foto<select id="localFlashMode" disabled><option value="">N/D</option></select></label>
     </div>
+    <details><summary>Diagnostica fotocamera</summary><p id="localDiagnostics" class="small diagnostics">In attesa delle capacità della camera.</p></details>
     <div class="capture-bar"><button id="localCapture" class="capture" type="button" disabled>📷 Scatta foto</button></div>
     <label class="inline-option"><input id="uploadImmediately" type="checkbox"> Carica subito dopo lo scatto (usa dati)</label>
     <div class="capture-bar"><button id="syncLocalPhotos" class="secondary" type="button" disabled>Sincronizza ora</button><span id="localQueueInfo" class="small">Nessuna foto in attesa.</span></div>

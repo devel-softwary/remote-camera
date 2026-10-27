@@ -1,5 +1,6 @@
 import { loadConfig, queryParam, setStatus, wsUrl } from './common.js';
 import { freezeVideoPreview } from './capture-preview.js';
+import { cameraDiagnostics, normalizedVideoPoint } from './camera-capabilities.js';
 
 const room = queryParam('room').toUpperCase();
 const token = queryParam('token');
@@ -15,6 +16,11 @@ const zoom = document.querySelector('#zoom');
 const zoomValue = document.querySelector('#zoomValue');
 const torchBtn = document.querySelector('#torch');
 const focusBtn = document.querySelector('#focus');
+const focusDistance = document.querySelector('#focusDistance');
+const focusDistanceValue = document.querySelector('#focusDistanceValue');
+const flashMode = document.querySelector('#flashMode');
+const capabilitiesEl = document.querySelector('#capabilities');
+let cameraInfo = null;
 let config, ws, pc, dc, torchOn = false, sequence = 0;
 
 function signal(message) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message)); }
@@ -26,11 +32,22 @@ function command(type, payload = {}) {
   if (type === 'capture') captureBtn.disabled = true;
 }
 function renderCameraInfo(message) {
+  cameraInfo = message;
   const controls = message.controls || {};
   const z = controls.zoom;
   if (z) { zoom.min = z.min; zoom.max = z.max; zoom.step = z.step || .1; zoom.value = z.value ?? z.min; zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`; zoom.disabled = false; }
   torchBtn.disabled = !controls.torch;
   focusBtn.disabled = !(controls.focusModes || []).length;
+  const distance = controls.focusDistance;
+  const manualFocus = distance && controls.focusModes?.includes('manual');
+  if (manualFocus) { focusDistance.min = distance.min; focusDistance.max = distance.max; focusDistance.step = distance.step; focusDistance.value = distance.value; focusDistanceValue.textContent = Number(distance.value).toFixed(2); }
+  else focusDistanceValue.textContent = 'N/D';
+  focusDistance.disabled = !manualFocus;
+  flashMode.replaceChildren(...(controls.flashModes || []).map(mode => new Option(mode, mode)));
+  flashMode.value = controls.flashMode || controls.flashModes?.[0] || '';
+  flashMode.disabled = !(controls.flashModes || []).length;
+  video.classList.toggle('touch-focus', Boolean(controls.pointsOfInterest));
+  capabilitiesEl.textContent = cameraDiagnostics(message);
   captureBtn.disabled = false;
   infoEl.textContent = `${message.label || 'Camera'} collegata.`;
 }
@@ -77,4 +94,12 @@ closeCapturePreviewBtn.addEventListener('click', () => { capturePreview.hidden =
 zoom.addEventListener('input', () => { zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`; command('set-zoom', { value: Number(zoom.value) }); });
 torchBtn.addEventListener('click', () => { torchOn = !torchOn; torchBtn.textContent = torchOn ? '🔦 Torcia ON' : '🔦 Torcia OFF'; command('set-torch', { value: torchOn }); });
 focusBtn.addEventListener('click', () => command('autofocus'));
+focusDistance.addEventListener('change', () => command('set-focus-distance', { value: Number(focusDistance.value) }));
+focusDistance.addEventListener('input', () => { focusDistanceValue.textContent = Number(focusDistance.value).toFixed(2); });
+flashMode.addEventListener('change', () => command('set-flash-mode', { value: flashMode.value }));
+video.addEventListener('click', event => {
+  if (!cameraInfo?.controls?.pointsOfInterest) return;
+  const point = normalizedVideoPoint(event.clientX, event.clientY, video.getBoundingClientRect(), video.videoWidth, video.videoHeight);
+  if (point) command('focus-at-point', point);
+});
 connect().catch(error => { setStatus(statusEl, 'Errore collegamento', 'warn'); infoEl.textContent = error.message; });

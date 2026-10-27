@@ -96,6 +96,8 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 
 Per lavorare senza secondo dispositivo, seleziona un punto e premi **Usa questo telefono**. Ogni scatto entra prima nella coda locale. Premi **Sincronizza ora** quando vuoi usare la rete, oppure abilita **Carica subito**.
 
+Zoom, torcia, autofocus, focus manuale, touch-to-focus e flash fotografico compaiono solo quando supportati dal browser e dalla camera. **Torcia** è luce continua; **Flash foto** viene applicato allo scatto tramite Image Capture.
+
 ## Limiti del POC
 
 - le foto transitano come Data URL JSON su WebSocket: semplice, ma non ottimale per immagini molto grandi;

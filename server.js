@@ -31,7 +31,7 @@ app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: fals
 
 const sessions = new Map();
 const downloadTickets = new Map();
-const mobileCommandTypes = new Set(['capture', 'set-zoom', 'set-torch', 'autofocus', 'get-camera-info']);
+const mobileCommandTypes = new Set(['capture', 'set-zoom', 'set-torch', 'autofocus', 'set-focus-distance', 'focus-at-point', 'set-flash-mode', 'get-camera-info']);
 
 function token(bytes = 24) { return crypto.randomBytes(bytes).toString('base64url'); }
 function roomCode() { return crypto.randomBytes(5).toString('hex').slice(0, 8).toUpperCase(); }

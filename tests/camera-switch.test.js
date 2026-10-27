@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../public/camera.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
 const result = await (async () => {
 
-const init = new Function('document','window','navigator','localStorage','loadConfig','wsUrl','queryParam','setStatus','formatBytes','WebSocket','RTCPeerConnection','setTimeout', source + '\nreturn {start,switchCamera,handleCommand};');
+const init = new Function('document','window','navigator','localStorage','loadConfig','wsUrl','queryParam','setStatus','formatBytes','WebSocket','RTCPeerConnection','setTimeout','normalizeCameraControls', source + '\nreturn {start,switchCamera,handleCommand};');
 function harness({exclusive=false, failure=false}={}) {
  const els=new Map(), tracks=[], calls=[], sent=[];let released=false, saved='';
  const document={querySelector(id){if(!els.has(id))els.set(id,{classList:{add(){},remove(){}},replaceChildren(){},append(){},addEventListener(){},play:async()=>{}});return els.get(id)},createElement(){return {}}};
@@ -17,7 +17,7 @@ function harness({exclusive=false, failure=false}={}) {
   },enumerateDevices:async()=>['back','front'].map(deviceId=>({kind:'videoinput',deviceId,label:deviceId}))
  }},{getItem:()=>saved,setItem:(key,v)=>saved=v},async()=>({iceServers:[]}),()=>'',()=> 'test',()=>{},()=>'',class {close(){}},class {
   addTrack(){return {replaceTrack:async(t)=>sent.push(t.label)}}createDataChannel(){return {readyState:'open',send(){}}}close(){}
- },(callback)=>{released=true;callback()});
+ },(callback)=>{released=true;callback()},(capabilities={})=>({zoom:null,torch:false,focusModes:capabilities.focusMode||[],focusDistance:null,pointsOfInterest:false,flashModes:[]}));
  return {api,tracks,calls,sent,saved:()=>saved};
 }
 function assert(value,message){if(!value)throw Error(message)}

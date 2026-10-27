@@ -10,6 +10,7 @@ import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
 import { freezeVideoPreview } from './capture-preview.js';
 import { GENERIC_WORK_PROFILE, MARADONA_WORK_PROFILE, maradonaPointName, normalizeMaradonaLocation, normalizeWorkProfile } from './work-profile.js';
+import { cameraDiagnostics, normalizedVideoPoint } from './camera-capabilities.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -31,6 +32,10 @@ const zoom = document.querySelector('#zoom');
 const zoomValue = document.querySelector('#zoomValue');
 const torchBtn = document.querySelector('#torch');
 const focusBtn = document.querySelector('#focus');
+const focusDistance = document.querySelector('#focusDistance');
+const focusDistanceGroup = document.querySelector('#focusDistanceGroup');
+const focusDistanceValue = document.querySelector('#focusDistanceValue');
+const flashMode = document.querySelector('#flashMode');
 const capabilitiesEl = document.querySelector('#capabilities');
 const expiryEl = document.querySelector('#expiry');
 const projectSelect = document.querySelector('#projectSelect');
@@ -545,6 +550,9 @@ function resetControls() {
   zoom.disabled = true;
   torchBtn.disabled = true;
   focusBtn.disabled = true;
+  focusDistance.disabled = true;
+  flashMode.disabled = true;
+  video.classList.remove('touch-focus');
   capabilitiesEl.textContent = 'In attesa delle capacità della camera.';
 }
 
@@ -635,8 +643,19 @@ function renderCameraInfo(msg) {
 
   torchBtn.disabled = !msg.controls?.torch;
   focusBtn.disabled = !(msg.controls?.focusModes?.length);
-  const s = msg.settings || {};
-  capabilitiesEl.textContent = `${msg.label || 'Camera'} • ${s.width || '?'}×${s.height || '?'} • zoom ${z ? 'sì' : 'no'} • torcia ${msg.controls?.torch ? 'sì' : 'no'} • focus ${(msg.controls?.focusModes || []).join(', ') || 'N/D'}`;
+  const distance = msg.controls?.focusDistance;
+  const manualFocus = distance && msg.controls?.focusModes?.includes('manual');
+  if (manualFocus) {
+    focusDistance.min = distance.min; focusDistance.max = distance.max; focusDistance.step = distance.step; focusDistance.value = distance.value;
+    focusDistanceValue.textContent = Number(distance.value).toFixed(2);
+  } else focusDistanceValue.textContent = 'N/D';
+  focusDistance.disabled = !manualFocus;
+  focusDistanceGroup.classList.toggle('disabled-control', !manualFocus);
+  flashMode.replaceChildren(...(msg.controls?.flashModes || []).map(mode => new Option(mode, mode)));
+  flashMode.value = msg.controls?.flashMode || msg.controls?.flashModes?.[0] || '';
+  flashMode.disabled = !(msg.controls?.flashModes || []).length;
+  video.classList.toggle('touch-focus', Boolean(msg.controls?.pointsOfInterest));
+  capabilitiesEl.textContent = cameraDiagnostics(msg);
 }
 
 function handleDataChannel(e) {
@@ -820,6 +839,23 @@ zoom.addEventListener('input', () => {
   zoomValue.textContent = `${Number(zoom.value).toFixed(1)}×`;
   clearTimeout(zoomTimer);
   zoomTimer = setTimeout(() => sendData({ type: 'set-zoom', value: Number(zoom.value) }), 80);
+});
+
+let focusTimer;
+focusDistance.addEventListener('input', () => {
+  focusDistanceValue.textContent = Number(focusDistance.value).toFixed(2);
+  clearTimeout(focusTimer);
+  focusTimer = setTimeout(() => sendData({ type: 'set-focus-distance', value: Number(focusDistance.value) }), 80);
+});
+
+flashMode.addEventListener('change', () => sendData({ type: 'set-flash-mode', value: flashMode.value }));
+
+video.addEventListener('click', event => {
+  if (!cameraInfo?.controls?.pointsOfInterest) return;
+  const point = normalizedVideoPoint(event.clientX, event.clientY, video.getBoundingClientRect(), video.videoWidth, video.videoHeight);
+  if (!point) return;
+  sendData({ type: 'focus-at-point', ...point, requestId: `focus-point-${Date.now()}` });
+  captureState.textContent = 'Messa a fuoco sul punto richiesta.';
 });
 
 torchBtn.addEventListener('click', () => {
