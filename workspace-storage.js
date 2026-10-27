@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { normalizeWorkProfile } from './public/work-profile.js';
 
 const MAX_PROJECTS = 500;
 const MAX_AREAS_PER_PROJECT = 500;
@@ -37,12 +38,15 @@ function clonePhoto(photo) {
 export function normalizeWorkspace(input) {
   const requestedProjects = Array.isArray(input?.projects) ? input.projects : [];
   const requestedAreas = input?.areasByProject && typeof input.areasByProject === 'object' ? input.areasByProject : {};
+  const requestedProfiles = input?.projectProfilesByProject && typeof input.projectProfilesByProject === 'object' ? input.projectProfilesByProject : {};
   const projects = [];
   const areasByProject = {};
+  const projectProfilesByProject = {};
   for (const rawProject of requestedProjects.slice(0, MAX_PROJECTS)) {
     const project = isSafeName(rawProject);
     if (!project || projects.some(item => item.toLocaleLowerCase() === project.toLocaleLowerCase())) continue;
     projects.push(project);
+    projectProfilesByProject[project] = normalizeWorkProfile(requestedProfiles[rawProject]);
     const seenAreaIds = new Set();
     const seenAreaNames = new Set();
     areasByProject[project] = (Array.isArray(requestedAreas[rawProject]) ? requestedAreas[rawProject] : [])
@@ -53,7 +57,7 @@ export function normalizeWorkspace(input) {
         seenAreaIds.add(area.id); seenAreaNames.add(area.name.toLocaleLowerCase()); return true;
       });
   }
-  return { projects, areasByProject };
+  return { projects, areasByProject, projectProfilesByProject };
 }
 
 export function mergeWorkspaces(serverWorkspace, localWorkspace) {
@@ -61,10 +65,14 @@ export function mergeWorkspaces(serverWorkspace, localWorkspace) {
   const local = normalizeWorkspace(localWorkspace);
   const projects = [...server.projects];
   const areasByProject = structuredClone(server.areasByProject);
+  const projectProfilesByProject = structuredClone(server.projectProfilesByProject);
   for (const project of local.projects) {
     const existingProject = projects.find(item => item.toLocaleLowerCase() === project.toLocaleLowerCase());
     const targetProject = existingProject || project;
     if (!existingProject) projects.push(project);
+    if (!existingProject || Object.hasOwn(localWorkspace?.projectProfilesByProject || {}, project)) {
+      projectProfilesByProject[targetProject] = local.projectProfilesByProject[project];
+    }
     const areas = areasByProject[targetProject] ||= [];
     for (const area of local.areasByProject[project] || []) {
       const index = areas.findIndex(item => item.id === area.id || item.name.toLocaleLowerCase() === area.name.toLocaleLowerCase());
@@ -72,7 +80,7 @@ export function mergeWorkspaces(serverWorkspace, localWorkspace) {
       else areas[index] = { ...areas[index], ...area, photos: mergePhotos(areas[index].photos, area.photos) };
     }
   }
-  return normalizeWorkspace({ projects, areasByProject });
+  return normalizeWorkspace({ projects, areasByProject, projectProfilesByProject });
 }
 
 function mergePhotos(serverPhotos = [], localPhotos = []) {

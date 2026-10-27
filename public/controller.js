@@ -9,6 +9,7 @@ import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
 import { freezeVideoPreview } from './capture-preview.js';
+import { GENERIC_WORK_PROFILE, normalizeWorkProfile } from './work-profile.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -33,6 +34,7 @@ const focusBtn = document.querySelector('#focus');
 const capabilitiesEl = document.querySelector('#capabilities');
 const expiryEl = document.querySelector('#expiry');
 const projectSelect = document.querySelector('#projectSelect');
+const projectProfile = document.querySelector('#projectProfile');
 const newProjectBtn = document.querySelector('#newProject');
 const syncWorkspaceBtn = document.querySelector('#syncWorkspace');
 const renameProjectBtn = document.querySelector('#renameProject');
@@ -86,6 +88,7 @@ let photoUploadAbortController = null;
 let torchOn = false;
 let cameraInfo = null;
 let projects = [];
+let projectProfilesByProject = {};
 let cadByProject = {};
 let photoPointsByProject = {};
 let areasByProject = {};
@@ -123,11 +126,13 @@ function renderHelp() {
 function loadWorkspace() {
   try {
     projects = JSON.parse(localStorage.getItem('remote-camera-projects') || '[]');
+    projectProfilesByProject = JSON.parse(localStorage.getItem('remote-camera-project-profiles') || '{}');
     cadByProject = JSON.parse(localStorage.getItem('remote-camera-cad') || '{}');
     photoPointsByProject = JSON.parse(localStorage.getItem('remote-camera-photo-points') || '{}');
     areasByProject = JSON.parse(localStorage.getItem('remote-camera-areas') || '{}');
-    if (!Array.isArray(projects) || typeof cadByProject !== 'object' || !cadByProject || typeof photoPointsByProject !== 'object' || !photoPointsByProject || typeof areasByProject !== 'object' || !areasByProject) throw new Error('Invalid workspace');
-  } catch { projects = []; cadByProject = {}; photoPointsByProject = {}; areasByProject = {}; }
+    if (!Array.isArray(projects) || typeof projectProfilesByProject !== 'object' || !projectProfilesByProject || typeof cadByProject !== 'object' || !cadByProject || typeof photoPointsByProject !== 'object' || !photoPointsByProject || typeof areasByProject !== 'object' || !areasByProject) throw new Error('Invalid workspace');
+  } catch { projects = []; projectProfilesByProject = {}; cadByProject = {}; photoPointsByProject = {}; areasByProject = {}; }
+  for (const project of projects) projectProfilesByProject[project] = normalizeWorkProfile(projectProfilesByProject[project]);
   let migrated = false;
   for (const project of projects) migrated = linkPhotoPointsToAreas(photoPointsByProject[project] || [], areasByProject[project] ||= []) || migrated;
   if (migrated) saveWorkspace();
@@ -136,12 +141,13 @@ function loadWorkspace() {
 
 function saveWorkspace() {
   localStorage.setItem('remote-camera-projects', JSON.stringify(projects));
+  localStorage.setItem('remote-camera-project-profiles', JSON.stringify(projectProfilesByProject));
   localStorage.setItem('remote-camera-cad', JSON.stringify(cadByProject));
   localStorage.setItem('remote-camera-photo-points', JSON.stringify(photoPointsByProject));
   localStorage.setItem('remote-camera-areas', JSON.stringify(areasByProject));
 }
 
-function workspacePayload() { return { projects, areasByProject }; }
+function workspacePayload() { return { projects, areasByProject, projectProfilesByProject }; }
 
 async function syncWorkspace() {
   const selectedProject = projectSelect.value;
@@ -156,6 +162,7 @@ async function syncWorkspace() {
     const workspace = await response.json();
     projects = workspace.projects;
     areasByProject = workspace.areasByProject;
+    projectProfilesByProject = workspace.projectProfilesByProject;
     saveWorkspace();
     renderProjects();
     projectSelect.value = projects.includes(selectedProject) ? selectedProject : '';
@@ -286,6 +293,8 @@ function currentSessionArea() { return session && (areasByProject[session.projec
 function updateProjectUi() {
   const project = projectSelect.value;
   const projectSelected = isProjectSelected(project);
+  projectProfile.disabled = !projectSelected;
+  projectProfile.value = projectSelected ? normalizeWorkProfile(projectProfilesByProject[project]).type : GENERIC_WORK_PROFILE;
   const cad = cadByProject[project];
   const drawing = cadDrawingByProject[project];
   cadShapes = drawing?.shapes || [];
@@ -874,6 +883,7 @@ newProjectBtn.addEventListener('click', () => {
   const name = nextProjectName(projects, window.prompt('Nome del nuovo progetto:', ''));
   if (!name) return;
   projects.push(name);
+  projectProfilesByProject[name] = normalizeWorkProfile();
   saveWorkspace();
   renderProjects();
   projectSelect.value = name;
@@ -881,6 +891,14 @@ newProjectBtn.addEventListener('click', () => {
 });
 
 syncWorkspaceBtn.addEventListener('click', syncWorkspace);
+
+projectProfile.addEventListener('change', () => {
+  const project = projectSelect.value;
+  if (!project) return;
+  projectProfilesByProject[project] = normalizeWorkProfile({ type: projectProfile.value });
+  saveWorkspace();
+  updateProjectUi();
+});
 
 renameProjectBtn.addEventListener('click', async () => {
   const current = projectSelect.value;
@@ -893,6 +911,7 @@ renameProjectBtn.addEventListener('click', async () => {
     return;
   }
   projects = projects.map(project => project === current ? name : project);
+  projectProfilesByProject[name] = projectProfilesByProject[current]; delete projectProfilesByProject[current];
   if (cadByProject[current]) { cadByProject[name] = cadByProject[current]; delete cadByProject[current]; }
   if (cadDrawingByProject[current]) { cadDrawingByProject[name] = cadDrawingByProject[current]; delete cadDrawingByProject[current]; }
   if (photoPointsByProject[current]) { photoPointsByProject[name] = photoPointsByProject[current]; delete photoPointsByProject[current]; }
@@ -908,6 +927,7 @@ deleteProjectBtn.addEventListener('click', async () => {
   if (!current || !window.confirm(`Eliminare il progetto “${current}”?`)) return;
   try { await deleteLayerFile(current); } catch (error) { window.alert(`Impossibile eliminare il layer: ${error.message}`); return; }
   projects = projects.filter(project => project !== current);
+  delete projectProfilesByProject[current];
   revokeLayerImage(cadDrawingByProject[current]);
   delete cadByProject[current];
   delete cadDrawingByProject[current];
