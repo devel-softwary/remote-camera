@@ -67,10 +67,14 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .camera-options summary, .local-secondary-controls summary { cursor:pointer; color:#cbd3e7; font-weight:700; padding:8px 0; }
 .local-point-picker { margin-top:10px; }
 .local-point-picker select { min-height:54px; font-size:1.05rem; font-weight:700; border-color:#7694ff; }
-.local-primary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:12px; }
+.local-camera-stage { position:relative; }
+.local-camera-stage video { display:block; }
+.local-primary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:12px; }
 .local-primary-grid input[type="range"] { width:100%; min-height:34px; accent-color:#3157e7; }
-.local-action-row { display:grid; grid-template-columns:minmax(120px,1fr) minmax(170px,2fr); gap:10px; margin-top:12px; }
-.local-capture { min-height:62px; font-size:1.1rem; }
+.local-action-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px; }
+.local-capture-overlay { display:none; }
+body.local-mode .local-capture-overlay { display:grid; place-items:center; position:absolute; left:50%; bottom:16px; transform:translateX(-50%); width:76px; min-height:76px; padding:0; border:5px solid #fff; border-radius:50%; background:#3157e7; box-shadow:0 5px 22px #000c; font-size:1.7rem; }
+body.local-mode .local-capture-overlay:active:not(:disabled) { transform:translateX(-50%) scale(.94); }
 .local-secondary-controls { margin-top:10px; border-top:1px solid #25304d; }
 .local-secondary-controls h3 { margin-bottom:0; }
 .controller-shell { width:min(1600px, 100%); }

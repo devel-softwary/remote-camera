@@ -135,6 +135,7 @@ function renderLocalCameraInfo(payload) {
     localFocusDistanceValue.textContent = Number(focusDistance.value).toFixed(2);
   }
   localFocusDistance.disabled = !manualFocus;
+  localFocusDistanceGroup.hidden = !manualFocus;
   localFocusDistanceGroup.classList.toggle('disabled-control', !manualFocus);
   localFlashMode.replaceChildren(...(controls.flashModes || []).map(mode => new Option(mode, mode)));
   localFlashMode.value = controls.flashModes?.includes(flashMode) ? flashMode : (controls.flashModes?.[0] || '');

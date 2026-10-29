@@ -11,7 +11,9 @@
     <button id="start">Consenti camera e collega</button>
     <p id="secureWarning" class="notice small hidden">La camera richiede HTTPS (eccetto localhost).</p>
   </section>
-  <section class="card camera-preview-card"><video id="localVideo" autoplay playsinline muted></video>
+  <section class="card camera-preview-card"><div class="local-camera-stage"><video id="localVideo" autoplay playsinline muted></video>
+      <button id="localCapture" class="capture local-capture-overlay" type="button" disabled aria-label="Scatta foto"><span aria-hidden="true">📷</span><span class="sr-only">Scatta foto</span></button>
+    </div>
     <p id="info" class="small camera-live-info" aria-live="polite">I controlli saranno gestiti dal dispositivo remoto.</p>
     <details id="cameraOptions" class="camera-options"><summary>Cambia fotocamera</summary>
       <label for="localCameraSelect">Fotocamera da usare<select id="localCameraSelect" disabled><option>Avvia prima la camera</option></select></label>
@@ -28,11 +30,10 @@
     </div>
     <div class="local-action-row">
       <button id="localFocus" class="secondary" type="button" disabled>◎ Autofocus</button>
-      <button id="localCapture" class="capture local-capture" type="button" disabled>📷 Scatta foto</button>
+      <button id="localTorch" class="secondary" type="button" disabled>🔦 Torcia OFF</button>
     </div>
     <details id="localSecondaryControls" class="local-secondary-controls"><summary>Illuminazione e altre opzioni</summary>
       <div class="control-grid">
-        <div class="button-control"><span>Illuminazione continua</span><button id="localTorch" class="secondary" type="button" disabled>🔦 Torcia OFF</button></div>
         <label>Flash foto<select id="localFlashMode" disabled><option value="">N/D</option></select></label>
       </div>
       <label class="inline-option"><input id="uploadImmediately" type="checkbox"> Carica subito dopo lo scatto (usa dati)</label>
