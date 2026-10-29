@@ -11,6 +11,10 @@ assert.match(controllerHtml, /id="maradonaTower"[^>]*max="28"/);
 assert.match(controllerHtml, /id="maradonaFace"/);
 assert.match(controllerHtml, /id="maradonaNode"[^>]*max="100"/);
 assert.match(controllerHtml, /id="startLocalSession"/);
+assert.ok(
+  controllerHtml.indexOf('id="startLocalSession"') < controllerHtml.indexOf('<h2>Progetto</h2>'),
+  'La modalità singolo telefono deve precedere la scelta del progetto'
+);
 assert.match(controllerHtml, /<h2>Punto foto<\/h2>/);
 assert.match(controllerHtml, /id="photoPointList"/);
 assert.match(controllerHtml, /id="startPointSession"[^>]*>Avvia sessione<\/button>/);
