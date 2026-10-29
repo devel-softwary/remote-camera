@@ -5,7 +5,7 @@ import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, 
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
-import { createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
+import { createFieldPoint, createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
 
 assert.equal(isCadFile({ name: 'rilievo.DWG' }), true);
 assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
@@ -121,6 +121,14 @@ assert.equal(newMaradonaProject.area, 'TR02_B_N003');
 assert.deepEqual(newMaradonaProject.workspace.projectProfilesByProject['Rilievo DAM'], { type: 'maradona', workName: 'DAM' });
 assert.equal(createFieldProject(newGenericProject.workspace, { name: 'via cleopatra', pointName: 'Altro' }), null);
 assert.equal(createFieldProject({ projects: [], areasByProject: {} }, { name: 'Invalido', type: 'maradona', location: { tower: 29, face: 'A', node: 1 } }), null);
+const newGenericPoint = createFieldPoint(newGenericProject.workspace, 'Via Cleopatra', { pointName: 'Pilastro sud' }, () => 'area-3');
+assert.deepEqual(newGenericPoint.workspace.areasByProject['Via Cleopatra'][1], { id: 'area-3', name: 'Pilastro sud', status: 'open', photos: [] });
+assert.equal(createFieldPoint(newGenericPoint.workspace, 'Via Cleopatra', { pointName: 'pilastro SUD' }), null);
+assert.equal(createFieldPoint(newGenericPoint.workspace, 'Via Cleopatra', { pointName: '../vietato' }), null);
+assert.equal(createFieldPoint(newGenericPoint.workspace, 'Progetto assente', { pointName: 'Punto' }), null);
+const newMaradonaPoint = createFieldPoint(newMaradonaProject.workspace, 'Rilievo DAM', { location: { tower: 28, face: 'd', node: 100 } }, () => 'area-4');
+assert.deepEqual(newMaradonaPoint.workspace.areasByProject['Rilievo DAM'][1], { id: 'area-4', name: 'TR28_D_N100', status: 'open', photos: [], location: { tower: 'TR28', face: 'D', node: 'N100' } });
+assert.equal(createFieldPoint(newMaradonaPoint.workspace, 'Rilievo DAM', { location: { tower: 29, face: 'A', node: 1 } }), null);
 assert.equal(nextAreaName([{ name: 'Pilastro nord' }], ' pilastro NORD '), '');
 assert.equal(nextAreaName([], ' Pilastro sud '), 'Pilastro sud');
 const area = createInterventionArea([], 'Pilastro sud');

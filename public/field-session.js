@@ -45,11 +45,11 @@ export function fieldPhotoItems(workspace, project, areaName, queuedPhotos = [])
 export function createFieldProject(workspace = {}, input = {}, createId = () => crypto.randomUUID()) {
   const name = String(input.name || '').trim();
   const existing = workspace.projects || [];
-  if (!name || name.length > 80 || name === '.' || name === '..' || /[\\/:*?"<>|\x00-\x1f]/.test(name) || existing.some(project => project.toLocaleLowerCase() === name.toLocaleLowerCase())) return null;
+  if (!isValidFieldName(name) || existing.some(project => project.toLocaleLowerCase() === name.toLocaleLowerCase())) return null;
   const profile = normalizeWorkProfile({ type: input.type });
   const location = profile.type === 'maradona' ? normalizeMaradonaLocation(input.location) : null;
   const pointName = profile.type === 'maradona' ? maradonaPointName(location) : String(input.pointName || '').trim();
-  if (!pointName || pointName.length > 80 || pointName === '.' || pointName === '..' || /[\\/:*?"<>|\x00-\x1f]/.test(pointName)) return null;
+  if (!isValidFieldName(pointName)) return null;
   const area = { id: createId(), name: pointName, status: 'open', photos: [], ...(location ? { location } : {}) };
   return {
     workspace: {
@@ -60,4 +60,27 @@ export function createFieldProject(workspace = {}, input = {}, createId = () => 
     project: name,
     area: pointName
   };
+}
+
+export function createFieldPoint(workspace = {}, project = '', input = {}, createId = () => crypto.randomUUID()) {
+  if (!(workspace.projects || []).includes(project)) return null;
+  const profile = normalizeWorkProfile(workspace.projectProfilesByProject?.[project]);
+  const location = profile.type === 'maradona' ? normalizeMaradonaLocation(input.location) : null;
+  const pointName = profile.type === 'maradona' ? maradonaPointName(location) : String(input.pointName || '').trim();
+  const areas = workspace.areasByProject?.[project] || [];
+  if (!isValidFieldName(pointName) || areas.some(area => String(area?.name || '').toLocaleLowerCase() === pointName.toLocaleLowerCase())) return null;
+  const area = { id: createId(), name: pointName, status: 'open', photos: [], ...(location ? { location } : {}) };
+  return {
+    workspace: {
+      projects: [...workspace.projects],
+      projectProfilesByProject: { ...(workspace.projectProfilesByProject || {}) },
+      areasByProject: { ...(workspace.areasByProject || {}), [project]: [...areas, area] }
+    },
+    project,
+    area: pointName
+  };
+}
+
+function isValidFieldName(name) {
+  return Boolean(name && name.length <= 80 && name !== '.' && name !== '..' && !/[\\/:*?"<>|\x00-\x1f]/.test(name));
 }

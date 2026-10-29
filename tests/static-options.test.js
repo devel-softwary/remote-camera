@@ -25,5 +25,6 @@ assert.match(cameraHtml, /id="localGallerySection"[\s\S]*id="localGallery"/);
 assert.match(cameraHtml, /id="localPhotoViewer"[\s\S]*id="localPhotoViewerImage"/);
 assert.match(cameraCss, /\.local-photo-grid \{ display:grid/);
 assert.match(cameraHtml, /id="newLocalProject"[\s\S]*id="localProjectDialog"[\s\S]*id="localProjectForm"/);
+assert.match(cameraHtml, /id="newLocalPoint"[\s\S]*id="localPointDialog"[\s\S]*id="localPointForm"/);
 
 console.log('Static asset cache policy regression passed');

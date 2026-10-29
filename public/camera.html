@@ -13,7 +13,7 @@
   </section>
   <section class="card camera-preview-card">
     <div class="local-project-row"><label class="local-project-picker" for="localProjectSelect">Progetto<select id="localProjectSelect" disabled><option>Caricamento progetti…</option></select></label><button id="newLocalProject" class="secondary" type="button" disabled>Nuovo progetto</button></div>
-    <label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Caricamento punti…</option></select></label>
+    <div class="local-point-row"><label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Caricamento punti…</option></select></label><button id="newLocalPoint" class="secondary" type="button" disabled>Nuovo punto</button></div>
     <div class="local-camera-stage"><video id="localVideo" autoplay playsinline muted></video>
       <button id="localCapture" class="capture local-capture-overlay" type="button" disabled aria-label="Scatta foto"><span aria-hidden="true">📷</span><span class="sr-only">Scatta foto</span></button>
     </div>
@@ -58,5 +58,16 @@
   </div>
   <p id="localProjectFormState" class="small" aria-live="polite"></p>
   <div class="actions"><button type="submit">Crea progetto</button><button id="cancelLocalProject" class="secondary" type="button">Annulla</button></div>
+</form></dialog>
+<dialog id="localPointDialog" class="local-project-dialog"><form id="localPointForm" class="local-project-form">
+  <div class="section-heading"><h2>Nuovo punto foto</h2><button id="closeLocalPointDialog" class="icon-button secondary" type="button" aria-label="Chiudi">×</button></div>
+  <label id="localPointNameField" for="localPointName">Nome punto foto<input id="localPointName" type="text" maxlength="80" autocomplete="off" placeholder="Es. Pilastro nord"></label>
+  <div id="localPointMaradonaFields" class="control-grid" hidden>
+    <label for="localPointTower">Traliccio<input id="localPointTower" type="number" min="1" max="28" inputmode="numeric" placeholder="1"></label>
+    <label for="localPointFace">Faccia<select id="localPointFace"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></label>
+    <label for="localPointNode">Nodo<input id="localPointNode" type="number" min="1" max="100" inputmode="numeric" placeholder="1"></label>
+  </div>
+  <p id="localPointFormState" class="small" aria-live="polite"></p>
+  <div class="actions"><button type="submit">Crea punto</button><button id="cancelLocalPoint" class="secondary" type="button">Annulla</button></div>
 </form></dialog>
 <script type="module" src="/camera.js"></script></body></html>

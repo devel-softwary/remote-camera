@@ -4,7 +4,7 @@ import { capturePhoto, captureVideoFrame } from './photo-capture.js';
 import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
-import { createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
+import { createFieldPoint, createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -19,6 +19,7 @@ const localControls = document.querySelector('#localControls');
 const localProjectSelect = document.querySelector('#localProjectSelect');
 const newLocalProjectBtn = document.querySelector('#newLocalProject');
 const localAreaSelect = document.querySelector('#localAreaSelect');
+const newLocalPointBtn = document.querySelector('#newLocalPoint');
 const localZoom = document.querySelector('#localZoom');
 const localZoomGroup = document.querySelector('#localZoomGroup');
 const localZoomValue = document.querySelector('#localZoomValue');
@@ -54,6 +55,17 @@ const localMaradonaTower = document.querySelector('#localMaradonaTower');
 const localMaradonaFace = document.querySelector('#localMaradonaFace');
 const localMaradonaNode = document.querySelector('#localMaradonaNode');
 const localProjectFormState = document.querySelector('#localProjectFormState');
+const localPointDialog = document.querySelector('#localPointDialog');
+const localPointForm = document.querySelector('#localPointForm');
+const closeLocalPointDialogBtn = document.querySelector('#closeLocalPointDialog');
+const cancelLocalPointBtn = document.querySelector('#cancelLocalPoint');
+const localPointNameField = document.querySelector('#localPointNameField');
+const localPointName = document.querySelector('#localPointName');
+const localPointMaradonaFields = document.querySelector('#localPointMaradonaFields');
+const localPointTower = document.querySelector('#localPointTower');
+const localPointFace = document.querySelector('#localPointFace');
+const localPointNode = document.querySelector('#localPointNode');
+const localPointFormState = document.querySelector('#localPointFormState');
 const preferredCameraKey = 'remote-camera.preferredDeviceId';
 
 let room = queryParam('room').toUpperCase();
@@ -588,6 +600,7 @@ function renderFieldAreas(project, preferredArea = '') {
   localAreaSelect.disabled = !areas.length;
   localActiveArea = areas.some(area => area.name === preferredArea) ? preferredArea : (areas[0]?.name || '');
   localAreaSelect.value = localActiveArea;
+  newLocalPointBtn.disabled = !(fieldWorkspace?.projects || []).includes(project);
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
   void refreshLocalGallery();
 }
@@ -595,7 +608,7 @@ function renderFieldAreas(project, preferredArea = '') {
 function renderFieldProjects(preferredProject = '') {
   const projects = fieldProjects(fieldWorkspace);
   localProjectSelect.replaceChildren(...projects.map(project => new Option(project, project)));
-  localProjectSelect.disabled = !projects.length;
+  localProjectSelect.disabled = Boolean(currentTrack) || !projects.length;
   localProject = projects.includes(preferredProject) ? preferredProject : (projects[0] || '');
   localProjectSelect.value = localProject;
   renderFieldAreas(localProject, localActiveArea);
@@ -668,6 +681,59 @@ async function submitLocalProject(event) {
     await refreshLocalGallery();
   } catch {
     localProjectFormState.textContent = 'Impossibile contattare il server.';
+  }
+}
+
+function renderLocalPointType() {
+  const maradona = fieldWorkspace?.projectProfilesByProject?.[localProject]?.type === 'maradona';
+  localPointNameField.hidden = maradona;
+  localPointName.required = !maradona;
+  localPointMaradonaFields.hidden = !maradona;
+  localPointTower.required = maradona;
+  localPointFace.required = maradona;
+  localPointNode.required = maradona;
+}
+
+function openLocalPointDialog() {
+  if (!localProject) return;
+  localPointForm.reset();
+  localPointFormState.textContent = '';
+  renderLocalPointType();
+  localPointDialog.showModal();
+  (localPointNameField.hidden ? localPointTower : localPointName).focus();
+}
+
+async function submitLocalPoint(event) {
+  event.preventDefault();
+  const draft = createFieldPoint(fieldWorkspace, localProject, {
+    pointName: localPointName.value,
+    location: { tower: localPointTower.value, face: localPointFace.value, node: localPointNode.value }
+  });
+  if (!draft) { localPointFormState.textContent = 'Controlla il punto: il nome deve essere univoco e i valori Maradona nei limiti previsti.'; return; }
+  localPointFormState.textContent = 'Creazione in corso…';
+  try {
+    const response = await fetch('/api/workspace/sync', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft.workspace)
+    });
+    if (!response.ok) { localPointFormState.textContent = (await response.json().catch(() => ({}))).message || 'Creazione non riuscita.'; return; }
+    fieldWorkspace = await response.json();
+    renderFieldProjects(draft.project);
+    renderFieldAreas(draft.project, draft.area);
+    localSessionBinding = undefined;
+    localPointDialog.close();
+    if (currentTrack) {
+      try {
+        await createLocalFieldSession();
+        requestReconnect();
+      } catch (error) {
+        infoEl.textContent = `Punto “${draft.area}” creato. Riprova l’avvio della sessione: ${error.message}`;
+        return;
+      }
+    }
+    infoEl.textContent = `Punto “${draft.area}” creato e selezionato.`;
+    await refreshLocalGallery();
+  } catch (error) {
+    localPointFormState.textContent = error.message || 'Impossibile contattare il server.';
   }
 }
 
@@ -898,11 +964,16 @@ localPhotoViewer.addEventListener('close', () => {
   viewerObjectUrl = '';
 });
 newLocalProjectBtn.addEventListener('click', openLocalProjectDialog);
+newLocalPointBtn.addEventListener('click', openLocalPointDialog);
 localProjectType.addEventListener('change', renderLocalProjectType);
 localProjectForm.addEventListener('submit', submitLocalProject);
 closeLocalProjectDialogBtn.addEventListener('click', () => localProjectDialog.close());
 cancelLocalProjectBtn.addEventListener('click', () => localProjectDialog.close());
 localProjectDialog.addEventListener('click', event => { if (event.target === localProjectDialog) localProjectDialog.close(); });
+localPointForm.addEventListener('submit', submitLocalPoint);
+closeLocalPointDialogBtn.addEventListener('click', () => localPointDialog.close());
+cancelLocalPointBtn.addEventListener('click', () => localPointDialog.close());
+localPointDialog.addEventListener('click', event => { if (event.target === localPointDialog) localPointDialog.close(); });
 window.addEventListener?.('pagehide', () => {
   galleryObjectUrls.forEach(url => URL.revokeObjectURL(url));
   if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);
