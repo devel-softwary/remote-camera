@@ -1,3 +1,5 @@
+import { maradonaPointName, normalizeMaradonaLocation, normalizeWorkProfile } from './work-profile.js';
+
 export function fieldProjects(workspace = {}) {
   const areasByProject = workspace.areasByProject || {};
   return (workspace.projects || []).filter(project => fieldAreas(workspace, project).length && Array.isArray(areasByProject[project]));
@@ -38,4 +40,24 @@ export function fieldPhotoItems(workspace, project, areaName, queuedPhotos = [])
     size: photo.size || photo.blob.size
   }));
   return [...queued, ...saved].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+export function createFieldProject(workspace = {}, input = {}, createId = () => crypto.randomUUID()) {
+  const name = String(input.name || '').trim();
+  const existing = workspace.projects || [];
+  if (!name || name.length > 80 || name === '.' || name === '..' || /[\\/:*?"<>|\x00-\x1f]/.test(name) || existing.some(project => project.toLocaleLowerCase() === name.toLocaleLowerCase())) return null;
+  const profile = normalizeWorkProfile({ type: input.type });
+  const location = profile.type === 'maradona' ? normalizeMaradonaLocation(input.location) : null;
+  const pointName = profile.type === 'maradona' ? maradonaPointName(location) : String(input.pointName || '').trim();
+  if (!pointName || pointName.length > 80 || pointName === '.' || pointName === '..' || /[\\/:*?"<>|\x00-\x1f]/.test(pointName)) return null;
+  const area = { id: createId(), name: pointName, status: 'open', photos: [], ...(location ? { location } : {}) };
+  return {
+    workspace: {
+      projects: [...existing, name],
+      projectProfilesByProject: { ...(workspace.projectProfilesByProject || {}), [name]: profile },
+      areasByProject: { ...(workspace.areasByProject || {}), [name]: [area] }
+    },
+    project: name,
+    area: pointName
+  };
 }

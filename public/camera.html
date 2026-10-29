@@ -12,7 +12,7 @@
     <p id="secureWarning" class="notice small hidden">La camera richiede HTTPS (eccetto localhost).</p>
   </section>
   <section class="card camera-preview-card">
-    <label class="local-project-picker" for="localProjectSelect">Progetto<select id="localProjectSelect" disabled><option>Caricamento progetti…</option></select></label>
+    <div class="local-project-row"><label class="local-project-picker" for="localProjectSelect">Progetto<select id="localProjectSelect" disabled><option>Caricamento progetti…</option></select></label><button id="newLocalProject" class="secondary" type="button" disabled>Nuovo progetto</button></div>
     <label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Caricamento punti…</option></select></label>
     <div class="local-camera-stage"><video id="localVideo" autoplay playsinline muted></video>
       <button id="localCapture" class="capture local-capture-overlay" type="button" disabled aria-label="Scatta foto"><span aria-hidden="true">📷</span><span class="sr-only">Scatta foto</span></button>
@@ -46,4 +46,17 @@
   </section>
 </main>
 <dialog id="localPhotoViewer" class="local-photo-dialog"><div class="local-photo-dialog-content"><div class="section-heading"><h2 id="localPhotoViewerTitle">Foto</h2><button id="closeLocalPhotoViewer" class="icon-button secondary" type="button" aria-label="Chiudi foto">×</button></div><img id="localPhotoViewerImage" alt="Foto scattata"></div></dialog>
+<dialog id="localProjectDialog" class="local-project-dialog"><form id="localProjectForm" class="local-project-form">
+  <div class="section-heading"><h2>Nuovo progetto</h2><button id="closeLocalProjectDialog" class="icon-button secondary" type="button" aria-label="Chiudi">×</button></div>
+  <label for="localProjectName">Nome progetto<input id="localProjectName" type="text" maxlength="80" autocomplete="off" required></label>
+  <label for="localProjectType">Tipo lavoro<select id="localProjectType"><option value="generic">Generico</option><option value="maradona">Maradona · DAM</option></select></label>
+  <label id="localGenericPointField" for="localFirstPointName">Primo punto foto<input id="localFirstPointName" type="text" maxlength="80" autocomplete="off" placeholder="Es. Pilastro nord" required></label>
+  <div id="localMaradonaFields" class="control-grid" hidden>
+    <label for="localMaradonaTower">Traliccio<input id="localMaradonaTower" type="number" min="1" max="28" inputmode="numeric" placeholder="1"></label>
+    <label for="localMaradonaFace">Faccia<select id="localMaradonaFace"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></label>
+    <label for="localMaradonaNode">Nodo<input id="localMaradonaNode" type="number" min="1" max="100" inputmode="numeric" placeholder="1"></label>
+  </div>
+  <p id="localProjectFormState" class="small" aria-live="polite"></p>
+  <div class="actions"><button type="submit">Crea progetto</button><button id="cancelLocalProject" class="secondary" type="button">Annulla</button></div>
+</form></dialog>
 <script type="module" src="/camera.js"></script></body></html>

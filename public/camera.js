@@ -4,7 +4,7 @@ import { capturePhoto, captureVideoFrame } from './photo-capture.js';
 import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
-import { fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
+import { createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -17,6 +17,7 @@ const localCameraSelect = document.querySelector('#localCameraSelect');
 const cameraHint = document.querySelector('#cameraHint');
 const localControls = document.querySelector('#localControls');
 const localProjectSelect = document.querySelector('#localProjectSelect');
+const newLocalProjectBtn = document.querySelector('#newLocalProject');
 const localAreaSelect = document.querySelector('#localAreaSelect');
 const localZoom = document.querySelector('#localZoom');
 const localZoomGroup = document.querySelector('#localZoomGroup');
@@ -40,6 +41,19 @@ const localPhotoViewer = document.querySelector('#localPhotoViewer');
 const localPhotoViewerTitle = document.querySelector('#localPhotoViewerTitle');
 const localPhotoViewerImage = document.querySelector('#localPhotoViewerImage');
 const closeLocalPhotoViewerBtn = document.querySelector('#closeLocalPhotoViewer');
+const localProjectDialog = document.querySelector('#localProjectDialog');
+const localProjectForm = document.querySelector('#localProjectForm');
+const closeLocalProjectDialogBtn = document.querySelector('#closeLocalProjectDialog');
+const cancelLocalProjectBtn = document.querySelector('#cancelLocalProject');
+const localProjectName = document.querySelector('#localProjectName');
+const localProjectType = document.querySelector('#localProjectType');
+const localGenericPointField = document.querySelector('#localGenericPointField');
+const localFirstPointName = document.querySelector('#localFirstPointName');
+const localMaradonaFields = document.querySelector('#localMaradonaFields');
+const localMaradonaTower = document.querySelector('#localMaradonaTower');
+const localMaradonaFace = document.querySelector('#localMaradonaFace');
+const localMaradonaNode = document.querySelector('#localMaradonaNode');
+const localProjectFormState = document.querySelector('#localProjectFormState');
 const preferredCameraKey = 'remote-camera.preferredDeviceId';
 
 let room = queryParam('room').toUpperCase();
@@ -601,11 +615,60 @@ async function restoreLocalSession() {
 
 async function initializeLocalSetup() {
   await fetchFieldWorkspace();
+  newLocalProjectBtn.disabled = false;
   renderFieldProjects();
   await restoreLocalSession();
-  if (!localProject) throw new Error('Nessun progetto con punti aperti disponibile. Crealo o sincronizzalo dal controller.');
+  if (!localProject) {
+    infoEl.textContent = 'Nessun progetto con punti aperti. Crea un nuovo progetto per iniziare.';
+    return;
+  }
   await refreshLocalGallery();
   infoEl.textContent = 'Scegli progetto e punto, poi avvia la fotocamera.';
+}
+
+function renderLocalProjectType() {
+  const maradona = localProjectType.value === 'maradona';
+  localGenericPointField.hidden = maradona;
+  localFirstPointName.required = !maradona;
+  localMaradonaFields.hidden = !maradona;
+  localMaradonaTower.required = maradona;
+  localMaradonaFace.required = maradona;
+  localMaradonaNode.required = maradona;
+}
+
+function openLocalProjectDialog() {
+  localProjectForm.reset();
+  localProjectFormState.textContent = '';
+  renderLocalProjectType();
+  localProjectDialog.showModal();
+  localProjectName.focus();
+}
+
+async function submitLocalProject(event) {
+  event.preventDefault();
+  const draft = createFieldProject(fieldWorkspace, {
+    name: localProjectName.value,
+    type: localProjectType.value,
+    pointName: localFirstPointName.value,
+    location: { tower: localMaradonaTower.value, face: localMaradonaFace.value, node: localMaradonaNode.value }
+  });
+  if (!draft) { localProjectFormState.textContent = 'Controlla nome progetto e primo punto. I nomi devono essere univoci e i valori Maradona nei limiti previsti.'; return; }
+  localProjectFormState.textContent = 'Creazione in corso…';
+  try {
+    const response = await fetch('/api/workspace/sync', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft.workspace)
+    });
+    if (!response.ok) { localProjectFormState.textContent = (await response.json().catch(() => ({}))).message || 'Creazione non riuscita.'; return; }
+    fieldWorkspace = await response.json();
+    renderFieldProjects(draft.project);
+    renderFieldAreas(draft.project, draft.area);
+    localSessionBinding = undefined;
+    localProjectDialog.close();
+    infoEl.textContent = `Progetto “${draft.project}” creato. Puoi avviare la fotocamera.`;
+    await refreshLocalGallery();
+  } catch {
+    localProjectFormState.textContent = 'Impossibile contattare il server.';
+  }
 }
 
 async function createLocalFieldSession() {
@@ -834,6 +897,12 @@ localPhotoViewer.addEventListener('close', () => {
   if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);
   viewerObjectUrl = '';
 });
+newLocalProjectBtn.addEventListener('click', openLocalProjectDialog);
+localProjectType.addEventListener('change', renderLocalProjectType);
+localProjectForm.addEventListener('submit', submitLocalProject);
+closeLocalProjectDialogBtn.addEventListener('click', () => localProjectDialog.close());
+cancelLocalProjectBtn.addEventListener('click', () => localProjectDialog.close());
+localProjectDialog.addEventListener('click', event => { if (event.target === localProjectDialog) localProjectDialog.close(); });
 window.addEventListener?.('pagehide', () => {
   galleryObjectUrls.forEach(url => URL.revokeObjectURL(url));
   if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);

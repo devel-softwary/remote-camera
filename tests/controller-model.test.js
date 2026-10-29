@@ -5,7 +5,7 @@ import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, 
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
-import { fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
+import { createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
 
 assert.equal(isCadFile({ name: 'rilievo.DWG' }), true);
 assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
@@ -113,6 +113,14 @@ const queuedBlob = new Blob(['photo'], { type: 'image/jpeg' });
 const fieldPhotos = fieldPhotoItems(fieldWorkspace, 'DAM', 'TR01_A_N001', [{ id: 'queue-1', project: 'DAM', area: 'TR01_A_N001', blob: queuedBlob, createdAt: '2026-10-29T10:00:00Z' }]);
 assert.deepEqual(fieldPhotos.map(photo => [photo.id, photo.source]), [['queue-1', 'device'], ['server-1', 'server']]);
 assert.equal(fieldPhotos[0].blob, queuedBlob);
+const newGenericProject = createFieldProject({ projects: [], areasByProject: {}, projectProfilesByProject: {} }, { name: 'Via Cleopatra', type: 'generic', pointName: 'Pilastro nord' }, () => 'area-1');
+assert.equal(newGenericProject.project, 'Via Cleopatra');
+assert.deepEqual(newGenericProject.workspace.areasByProject['Via Cleopatra'][0], { id: 'area-1', name: 'Pilastro nord', status: 'open', photos: [] });
+const newMaradonaProject = createFieldProject({ projects: [], areasByProject: {}, projectProfilesByProject: {} }, { name: 'Rilievo DAM', type: 'maradona', location: { tower: 2, face: 'b', node: 3 } }, () => 'area-2');
+assert.equal(newMaradonaProject.area, 'TR02_B_N003');
+assert.deepEqual(newMaradonaProject.workspace.projectProfilesByProject['Rilievo DAM'], { type: 'maradona', workName: 'DAM' });
+assert.equal(createFieldProject(newGenericProject.workspace, { name: 'via cleopatra', pointName: 'Altro' }), null);
+assert.equal(createFieldProject({ projects: [], areasByProject: {} }, { name: 'Invalido', type: 'maradona', location: { tower: 29, face: 'A', node: 1 } }), null);
 assert.equal(nextAreaName([{ name: 'Pilastro nord' }], ' pilastro NORD '), '');
 assert.equal(nextAreaName([], ' Pilastro sud '), 'Pilastro sud');
 const area = createInterventionArea([], 'Pilastro sud');

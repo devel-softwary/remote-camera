@@ -98,6 +98,8 @@ Per lavorare senza secondo dispositivo, premi **Apri modalità singolo telefono*
 
 La sezione **Foto del punto** mostra insieme gli scatti ancora sul telefono e quelli già archiviati sul server. Tocca una miniatura per aprire l'originale.
 
+Da **Nuovo progetto** puoi creare un lavoro generico o Maradona e il suo primo punto senza tornare al controller.
+
 Zoom, torcia, autofocus, focus manuale, touch-to-focus e flash fotografico compaiono solo quando supportati dal browser e dalla camera. **Torcia** è luce continua; **Flash foto** viene applicato allo scatto tramite Image Capture.
 
 ## Limiti del POC

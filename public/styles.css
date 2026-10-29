@@ -67,6 +67,9 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .camera-options summary, .local-diagnostics summary { cursor:pointer; color:#cbd3e7; font-weight:700; padding:8px 0; }
 .local-project-picker, .local-point-picker { display:none; margin-bottom:10px; }
 body.local-mode .local-project-picker, body.local-mode .local-point-picker { display:grid; }
+.local-project-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; }
+.local-project-row > button { display:none; margin-bottom:10px; }
+body.local-mode .local-project-row > button { display:block; }
 .local-project-picker select, .local-point-picker select { min-height:54px; font-size:1.05rem; font-weight:700; border-color:#7694ff; }
 .local-camera-stage { position:relative; }
 .local-camera-stage video { display:block; }
@@ -91,6 +94,10 @@ body.local-mode .local-capture-overlay:active:not(:disabled) { transform:transla
 .local-photo-dialog-content { padding:14px; }
 .local-photo-dialog-content .section-heading { margin-bottom:12px; }
 .local-photo-dialog-content img { display:block; max-width:100%; max-height:calc(100dvh - 110px); margin:auto; object-fit:contain; }
+.local-project-dialog { width:min(560px,calc(100% - 20px)); padding:0; color:#eef2ff; background:#12192b; border:1px solid #36425f; border-radius:18px; }
+.local-project-dialog::backdrop { background:#050812e6; }
+.local-project-form { display:grid; gap:14px; padding:18px; }
+.local-project-form .section-heading { margin-bottom:0; }
 .controller-shell { width:min(1600px, 100%); }
 .controller-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
 .controller-header h1 { margin:0; }
@@ -169,4 +176,8 @@ body.local-mode .local-capture-overlay:active:not(:disabled) { transform:transla
   body.local-mode .camera-options { margin:0 4px; }
   body.local-mode #localControls { margin-top:8px; padding:12px; border-color:#526aa8; }
   body.local-mode #localControls h2 { margin:0; font-size:1.15rem; }
+}
+@media (max-width:420px) {
+  body.local-mode .local-project-row { grid-template-columns:1fr; gap:0; }
+  body.local-mode .local-project-row > button { width:100%; margin:0 0 10px; }
 }

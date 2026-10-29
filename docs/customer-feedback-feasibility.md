@@ -12,6 +12,7 @@ Data analisi: 24 ottobre 2026.
 - 29 ottobre 2026: mantenuto lo scatto al centro inferiore dell'anteprima; eliminata la sovrapposizione del pannello, ripristinati tutti i comandi e caricati i punti prima dell'avvio camera.
 - 29 ottobre 2026: resa autonoma la modalità singolo telefono con scelta progetto → punto e creazione della sessione al momento dell'avvio camera.
 - 29 ottobre 2026: aggiunta nella modalità singolo telefono la consultazione delle foto del punto, distinguendo coda locale e archivio server.
+- 29 ottobre 2026: aggiunta la creazione di un nuovo progetto con primo punto, sia generico sia Maradona, direttamente dal telefono.
 
 ## Esito
 
