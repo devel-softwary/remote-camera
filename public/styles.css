@@ -65,9 +65,9 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .touch-focus { cursor:crosshair; }
 .camera-options { margin-top:10px; }
 .camera-options summary, .local-diagnostics summary { cursor:pointer; color:#cbd3e7; font-weight:700; padding:8px 0; }
-.local-point-picker { display:none; margin-bottom:10px; }
-body.local-mode .local-point-picker { display:grid; }
-.local-point-picker select { min-height:54px; font-size:1.05rem; font-weight:700; border-color:#7694ff; }
+.local-project-picker, .local-point-picker { display:none; margin-bottom:10px; }
+body.local-mode .local-project-picker, body.local-mode .local-point-picker { display:grid; }
+.local-project-picker select, .local-point-picker select { min-height:54px; font-size:1.05rem; font-weight:700; border-color:#7694ff; }
 .local-camera-stage { position:relative; }
 .local-camera-stage video { display:block; }
 .local-primary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-top:12px; }

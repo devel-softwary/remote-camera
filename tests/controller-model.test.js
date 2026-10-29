@@ -5,6 +5,7 @@ import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, 
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
+import { fieldAreas, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
 
 assert.equal(isCadFile({ name: 'rilievo.DWG' }), true);
 assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
@@ -91,6 +92,22 @@ assert.deepEqual(fieldSessionPayload(uploadSession, 'camera', equalTokens, 1999)
 });
 assert.equal(fieldSessionPayload(uploadSession, 'wrong', equalTokens, 1999), null);
 assert.equal(fieldSessionPayload(uploadSession, 'camera', equalTokens, 2000), null);
+const fieldWorkspace = {
+  projects: ['DAM', 'Vuoto'],
+  projectProfilesByProject: { DAM: { type: 'maradona', workName: 'DAM' } },
+  areasByProject: {
+    DAM: [{ name: 'TR01_A_N001', status: 'open', location: { tower: 'TR01', face: 'A', node: 'N001' } }, { name: 'Chiuso', status: 'closed' }],
+    Vuoto: []
+  }
+};
+assert.deepEqual(fieldProjects(fieldWorkspace), ['DAM']);
+assert.deepEqual(fieldAreas(fieldWorkspace, 'DAM').map(area => area.name), ['TR01_A_N001']);
+assert.deepEqual(fieldSessionRequest(fieldWorkspace, 'DAM', 'TR01_A_N001'), {
+  project: 'DAM', area: 'TR01_A_N001', workProfile: { type: 'maradona', workName: 'DAM' },
+  location: { tower: 'TR01', face: 'A', node: 'N001' },
+  areas: [{ name: 'TR01_A_N001', location: { tower: 'TR01', face: 'A', node: 'N001' } }], localMode: true
+});
+assert.equal(fieldSessionRequest(fieldWorkspace, 'DAM', 'Chiuso'), null);
 assert.equal(nextAreaName([{ name: 'Pilastro nord' }], ' pilastro NORD '), '');
 assert.equal(nextAreaName([], ' Pilastro sud '), 'Pilastro sud');
 const area = createInterventionArea([], 'Pilastro sud');

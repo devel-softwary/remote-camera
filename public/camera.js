@@ -4,6 +4,7 @@ import { capturePhoto, captureVideoFrame } from './photo-capture.js';
 import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
+import { fieldAreas, fieldProjects, fieldSessionRequest } from './field-session.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -15,6 +16,7 @@ const controlsInfo = document.querySelector('#controlsInfo');
 const localCameraSelect = document.querySelector('#localCameraSelect');
 const cameraHint = document.querySelector('#cameraHint');
 const localControls = document.querySelector('#localControls');
+const localProjectSelect = document.querySelector('#localProjectSelect');
 const localAreaSelect = document.querySelector('#localAreaSelect');
 const localZoom = document.querySelector('#localZoom');
 const localZoomGroup = document.querySelector('#localZoomGroup');
@@ -32,8 +34,8 @@ const syncLocalPhotosBtn = document.querySelector('#syncLocalPhotos');
 const localQueueInfo = document.querySelector('#localQueueInfo');
 const preferredCameraKey = 'remote-camera.preferredDeviceId';
 
-const room = queryParam('room').toUpperCase();
-const authToken = queryParam('token');
+let room = queryParam('room').toUpperCase();
+let authToken = queryParam('token');
 const localMode = queryParam('local') === '1';
 document.body?.classList.toggle('local-mode', localMode);
 localControls.hidden = !localMode;
@@ -57,7 +59,10 @@ let localTorchOn = false;
 let localSyncBusy = false;
 let photoCapabilities = {};
 let flashMode = 'off';
-let localSessionReady;
+let fieldWorkspace;
+let localSetupReady;
+let localSetupError;
+let localSessionBinding;
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -487,19 +492,64 @@ function renderLocalSession(message) {
   void refreshLocalQueue();
 }
 
-function ensureLocalSession() {
-  if (!localMode) return Promise.resolve();
-  if (!localSessionReady) {
-    localSessionReady = fetch('/api/field-session', { headers: { 'x-room': room, 'x-camera-token': authToken } })
-      .then(async response => {
-        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Sessione locale non disponibile.');
-        const message = await response.json();
-        renderLocalSession(message);
-        return message;
-      })
-      .catch(error => { localSessionReady = undefined; throw error; });
-  }
-  return localSessionReady;
+function renderFieldAreas(project, preferredArea = '') {
+  const areas = fieldAreas(fieldWorkspace, project);
+  localAreaSelect.replaceChildren(...areas.map(area => new Option(area.name, area.name)));
+  localAreaSelect.disabled = !areas.length;
+  localActiveArea = areas.some(area => area.name === preferredArea) ? preferredArea : (areas[0]?.name || '');
+  localAreaSelect.value = localActiveArea;
+  localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
+}
+
+function renderFieldProjects(preferredProject = '') {
+  const projects = fieldProjects(fieldWorkspace);
+  localProjectSelect.replaceChildren(...projects.map(project => new Option(project, project)));
+  localProjectSelect.disabled = !projects.length;
+  localProject = projects.includes(preferredProject) ? preferredProject : (projects[0] || '');
+  localProjectSelect.value = localProject;
+  renderFieldAreas(localProject, localActiveArea);
+}
+
+async function restoreLocalSession() {
+  if (!room || !authToken) return false;
+  const response = await fetch('/api/field-session', { headers: { 'x-room': room, 'x-camera-token': authToken } });
+  if (!response.ok) return false;
+  const message = await response.json();
+  renderFieldProjects(message.project);
+  renderFieldAreas(message.project, message.activeArea);
+  renderLocalSession(message);
+  localSessionBinding = { project: message.project, area: message.activeArea };
+  return true;
+}
+
+async function initializeLocalSetup() {
+  const response = await fetch('/api/workspace');
+  if (!response.ok) throw new Error('Impossibile caricare progetti e punti dal server.');
+  fieldWorkspace = await response.json();
+  renderFieldProjects();
+  await restoreLocalSession();
+  if (!localProject) throw new Error('Nessun progetto con punti aperti disponibile. Crealo o sincronizzalo dal controller.');
+  infoEl.textContent = 'Scegli progetto e punto, poi avvia la fotocamera.';
+}
+
+async function createLocalFieldSession() {
+  const request = fieldSessionRequest(fieldWorkspace, localProjectSelect.value, localAreaSelect.value);
+  if (!request) throw new Error('Seleziona prima un progetto e un punto foto aperto.');
+  if (localSessionBinding?.project === request.project && localSessionBinding.area === request.area && room && authToken) return;
+  const response = await fetch('/api/session', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request)
+  });
+  if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Impossibile creare la sessione locale.');
+  const session = await response.json();
+  room = session.room;
+  authToken = session.cameraToken;
+  localSessionBinding = { project: request.project, area: request.area };
+  renderLocalSession({ ...session, activeArea: request.area, areas: request.areas });
+  const url = new URL(window.location.href);
+  url.searchParams.set('local', '1');
+  url.searchParams.set('room', room);
+  url.searchParams.set('token', authToken);
+  window.history.replaceState(null, '', url);
 }
 
 async function handleCommand(msg) {
@@ -606,8 +656,15 @@ function connectWs() {
 }
 
 async function start() {
-  if (!room || !authToken) throw new Error('Link di pairing incompleto. Scansiona il QR del controller.');
-  if (localMode) await ensureLocalSession();
+  if (localMode) {
+    if (localSetupError) {
+      localSetupError = undefined;
+      localSetupReady = initializeLocalSetup().catch(error => { localSetupError = error; });
+    }
+    await localSetupReady;
+    if (localSetupError) throw localSetupError;
+    await createLocalFieldSession();
+  } else if (!room || !authToken) throw new Error('Link di pairing incompleto. Scansiona il QR del controller.');
   if (!window.isSecureContext) throw new Error('La fotocamera richiede un link HTTPS con certificato attendibile sul telefono. Apri il controller tramite HTTPS e genera un nuovo QR.');
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('Fotocamera non disponibile in questo browser. Apri il link in Safari su iPhone o Chrome su Android, fuori dal lettore QR o dalle app di messaggistica.');
   setStatus(statusEl, 'Autorizza la fotocamera', 'warn');
@@ -622,6 +679,7 @@ async function start() {
   config = localMode ? { iceServers: [] } : await loadConfig();
   connectWs();
   permissionCard.classList.add('hidden');
+  if (localMode) localProjectSelect.disabled = true;
   if (localMode) {
     void navigator.storage?.persist?.();
     await refreshLocalQueue();
@@ -646,8 +704,14 @@ function startupErrorMessage(err) {
 
 localAreaSelect.addEventListener('change', () => {
   localActiveArea = localAreaSelect.value;
+  if (localSessionBinding?.project === localProject) localSessionBinding.area = localActiveArea;
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
   sendSignal({ type: 'session-area', area: localActiveArea });
+});
+localProjectSelect.addEventListener('change', () => {
+  localProject = localProjectSelect.value;
+  localSessionBinding = undefined;
+  renderFieldAreas(localProject);
 });
 localZoom.addEventListener('input', async () => {
   localZoomValue.textContent = `${Number(localZoom.value).toFixed(1)}×`;
@@ -687,9 +751,11 @@ localCaptureBtn.addEventListener('click', captureLocalPhoto);
 syncLocalPhotosBtn.addEventListener('click', syncLocalPhotos);
 
 if (localMode) {
-  void ensureLocalSession()
-    .then(() => { infoEl.textContent = 'Punti caricati. Scegli il punto e avvia la fotocamera.'; })
-    .catch(error => { infoEl.textContent = error.message; setStatus(statusEl, 'Sessione locale non disponibile', 'warn'); });
+  localSetupReady = initializeLocalSetup().catch(error => {
+    localSetupError = error;
+    infoEl.textContent = error.message;
+    setStatus(statusEl, 'Progetti non disponibili', 'warn');
+  });
 }
 
 startBtn.addEventListener('click', async () => {

@@ -14,6 +14,7 @@ assert.doesNotMatch(fs.readFileSync(new URL('../public/controller.html', import.
 const cameraHtml = fs.readFileSync(new URL('../public/camera.html', import.meta.url), 'utf8');
 const cameraCss = fs.readFileSync(new URL('../public/styles.css', import.meta.url), 'utf8');
 assert.match(cameraHtml, /local-camera-stage[\s\S]*id="localVideo"[\s\S]*id="localCapture"/);
+assert.ok(cameraHtml.indexOf('id="localProjectSelect"') < cameraHtml.indexOf('id="localAreaSelect"'), 'il progetto deve precedere il punto');
 assert.ok(cameraHtml.indexOf('id="localAreaSelect"') < cameraHtml.indexOf('class="local-camera-stage"'), 'il punto deve precedere l’anteprima');
 const positions = ['localZoom', 'localFocusDistance', 'localFocus', 'localTorch', 'localFlashMode', 'uploadImmediately', 'syncLocalPhotos', 'localDiagnostics'].map(id => cameraHtml.indexOf(`id="${id}"`));
 assert.ok(positions.every((position, index) => index === 0 || position > positions[index - 1]), 'i comandi originali devono restare disponibili');

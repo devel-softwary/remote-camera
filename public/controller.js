@@ -3,7 +3,7 @@ import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage }
 import { canCaptureArea, canDownloadProject, canStartPointSession, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint, reopenInterventionArea } from './controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from './cad-viewer.js';
 import { HELP_STEPS } from './help-content.js';
-import { cameraSessionLink } from './session-links.js';
+import { cameraSessionLink, localCameraLink } from './session-links.js';
 import { createThumbnail, deleteThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
@@ -258,7 +258,7 @@ function renderAreas() {
   const selectedArea = currentSelectedArea();
   const canStartSession = canStartPointSession(project, selectedArea, sessionStarting);
   startPointSessionBtn.disabled = !canStartSession;
-  startLocalSessionBtn.disabled = !canStartSession;
+  startLocalSessionBtn.disabled = sessionStarting || !projects.some(name => (areasByProject[name] || []).some(item => item.status === 'open'));
   closeAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'open';
   reopenAreaBtn.disabled = !projectSelected || selectedArea?.status !== 'closed';
   const area = currentArea();
@@ -924,13 +924,10 @@ projectSelect.addEventListener('change', () => { pendingPhotoPoint = null; addin
 areaSelect.addEventListener('change', () => { renderAreas(); publishActiveArea(); });
 startPointSessionBtn.addEventListener('click', startSessionForSelectedPoint);
 startLocalSessionBtn.addEventListener('click', async () => {
-  if (!currentArea() || !(await syncWorkspace())) return;
-  const area = currentArea();
-  if (!area) { window.alert('Il punto selezionato non è più disponibile. Selezionalo nuovamente.'); renderAreas(); return; }
+  if (!(await syncWorkspace())) return;
   startLocalSessionBtn.disabled = true;
   try {
-    await createSession(area, true);
-    location.assign(cameraSessionLink(config.baseUrl, session.room, session.cameraToken, true));
+    location.assign(localCameraLink(config.baseUrl));
   } catch (error) {
     window.alert(error.message);
     renderAreas();

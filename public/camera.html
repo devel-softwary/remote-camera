@@ -12,6 +12,7 @@
     <p id="secureWarning" class="notice small hidden">La camera richiede HTTPS (eccetto localhost).</p>
   </section>
   <section class="card camera-preview-card">
+    <label class="local-project-picker" for="localProjectSelect">Progetto<select id="localProjectSelect" disabled><option>Caricamento progetti…</option></select></label>
     <label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Caricamento punti…</option></select></label>
     <div class="local-camera-stage"><video id="localVideo" autoplay playsinline muted></video>
       <button id="localCapture" class="capture local-capture-overlay" type="button" disabled aria-label="Scatta foto"><span aria-hidden="true">📷</span><span class="sr-only">Scatta foto</span></button>

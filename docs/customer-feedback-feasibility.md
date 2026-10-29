@@ -10,6 +10,7 @@ Data analisi: 24 ottobre 2026.
 - 27 ottobre 2026: completata Fase 4. Aggiunti diagnostica capability, focus manuale, touch-to-focus e flash fotografico condizionali.
 - 27 ottobre 2026: ottimizzata l'interfaccia locale per il rilievo: punto attivo, zoom, focus e scatto restano nel pannello operativo mobile; opzioni secondarie raccolte separatamente.
 - 29 ottobre 2026: mantenuto lo scatto al centro inferiore dell'anteprima; eliminata la sovrapposizione del pannello, ripristinati tutti i comandi e caricati i punti prima dell'avvio camera.
+- 29 ottobre 2026: resa autonoma la modalità singolo telefono con scelta progetto → punto e creazione della sessione al momento dell'avvio camera.
 
 ## Esito
 
