@@ -96,6 +96,8 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 
 Per lavorare senza secondo dispositivo, premi **Apri modalità singolo telefono**, quindi scegli progetto e punto nella pagina camera. Ogni scatto entra prima nella coda locale. Premi **Sincronizza ora** quando vuoi usare la rete, oppure abilita **Carica subito**.
 
+La sezione **Foto del punto** mostra insieme gli scatti ancora sul telefono e quelli già archiviati sul server. Tocca una miniatura per aprire l'originale.
+
 Zoom, torcia, autofocus, focus manuale, touch-to-focus e flash fotografico compaiono solo quando supportati dal browser e dalla camera. **Torcia** è luce continua; **Flash foto** viene applicato allo scatto tramite Image Capture.
 
 ## Limiti del POC

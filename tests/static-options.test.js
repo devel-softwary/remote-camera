@@ -21,5 +21,8 @@ assert.ok(positions.every((position, index) => index === 0 || position > positio
 assert.doesNotMatch(cameraCss, /body\.local-mode #localControls \{[^}]*position:sticky/);
 assert.match(cameraCss, /\.local-action-row \{ display:grid/);
 assert.match(cameraCss, /body\.local-mode \.local-capture-overlay \{ display:grid;[\s\S]*position:absolute;[\s\S]*left:50%;[\s\S]*bottom:16px/);
+assert.match(cameraHtml, /id="localGallerySection"[\s\S]*id="localGallery"/);
+assert.match(cameraHtml, /id="localPhotoViewer"[\s\S]*id="localPhotoViewerImage"/);
+assert.match(cameraCss, /\.local-photo-grid \{ display:grid/);
 
 console.log('Static asset cache policy regression passed');

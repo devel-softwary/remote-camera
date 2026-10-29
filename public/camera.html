@@ -39,4 +39,11 @@
     <div class="capture-bar"><button id="syncLocalPhotos" class="secondary" type="button" disabled>Sincronizza ora</button><span id="localQueueInfo" class="small">Nessuna foto in attesa.</span></div>
     <details class="local-diagnostics"><summary>Diagnostica fotocamera</summary><p id="localDiagnostics" class="small diagnostics">In attesa delle capacità della camera.</p></details>
   </section>
-</main><script type="module" src="/camera.js"></script></body></html>
+  <section id="localGallerySection" class="card local-gallery-section" hidden>
+    <div class="section-heading"><h2>Foto del punto</h2><button id="refreshLocalGallery" class="secondary" type="button">Aggiorna</button></div>
+    <p id="localGalleryState" class="small">Seleziona un punto.</p>
+    <div id="localGallery" class="local-photo-grid"><p class="small">Nessuna foto.</p></div>
+  </section>
+</main>
+<dialog id="localPhotoViewer" class="local-photo-dialog"><div class="local-photo-dialog-content"><div class="section-heading"><h2 id="localPhotoViewerTitle">Foto</h2><button id="closeLocalPhotoViewer" class="icon-button secondary" type="button" aria-label="Chiudi foto">×</button></div><img id="localPhotoViewerImage" alt="Foto scattata"></div></dialog>
+<script type="module" src="/camera.js"></script></body></html>

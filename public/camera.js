@@ -4,7 +4,7 @@ import { capturePhoto, captureVideoFrame } from './photo-capture.js';
 import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
-import { fieldAreas, fieldProjects, fieldSessionRequest } from './field-session.js';
+import { fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -32,6 +32,14 @@ const localCaptureBtn = document.querySelector('#localCapture');
 const uploadImmediately = document.querySelector('#uploadImmediately');
 const syncLocalPhotosBtn = document.querySelector('#syncLocalPhotos');
 const localQueueInfo = document.querySelector('#localQueueInfo');
+const localGallerySection = document.querySelector('#localGallerySection');
+const localGalleryState = document.querySelector('#localGalleryState');
+const localGallery = document.querySelector('#localGallery');
+const refreshLocalGalleryBtn = document.querySelector('#refreshLocalGallery');
+const localPhotoViewer = document.querySelector('#localPhotoViewer');
+const localPhotoViewerTitle = document.querySelector('#localPhotoViewerTitle');
+const localPhotoViewerImage = document.querySelector('#localPhotoViewerImage');
+const closeLocalPhotoViewerBtn = document.querySelector('#closeLocalPhotoViewer');
 const preferredCameraKey = 'remote-camera.preferredDeviceId';
 
 let room = queryParam('room').toUpperCase();
@@ -39,6 +47,7 @@ let authToken = queryParam('token');
 const localMode = queryParam('local') === '1';
 document.body?.classList.toggle('local-mode', localMode);
 localControls.hidden = !localMode;
+localGallerySection.hidden = !localMode;
 if (localMode) infoEl.textContent = 'Avvia la fotocamera per iniziare il rilievo locale.';
 if (!window.isSecureContext) secureWarning.classList.remove('hidden');
 
@@ -63,6 +72,9 @@ let fieldWorkspace;
 let localSetupReady;
 let localSetupError;
 let localSessionBinding;
+let galleryRenderSequence = 0;
+let galleryObjectUrls = [];
+let viewerObjectUrl = '';
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -407,6 +419,66 @@ async function refreshLocalQueue() {
   }
 }
 
+async function fetchFieldWorkspace() {
+  const response = await fetch('/api/workspace');
+  if (!response.ok) throw new Error('Impossibile caricare progetti e punti dal server.');
+  fieldWorkspace = await response.json();
+  return fieldWorkspace;
+}
+
+function closeLocalPhotoViewer() {
+  localPhotoViewer.close();
+  localPhotoViewerImage.removeAttribute('src');
+  if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);
+  viewerObjectUrl = '';
+}
+
+function openLocalPhoto(item) {
+  if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);
+  viewerObjectUrl = item.blob ? URL.createObjectURL(item.blob) : '';
+  localPhotoViewerImage.src = viewerObjectUrl || item.url;
+  localPhotoViewerTitle.textContent = `${localActiveArea} · ${item.source === 'device' ? 'sul telefono' : 'sul server'}`;
+  localPhotoViewer.showModal();
+}
+
+async function refreshLocalGallery({ reloadWorkspace = false } = {}) {
+  if (!localMode) return;
+  const sequence = ++galleryRenderSequence;
+  try {
+    if (reloadWorkspace) await fetchFieldWorkspace();
+    const queued = localProject ? await listQueuedPhotosForProject(localProject) : [];
+    if (sequence !== galleryRenderSequence) return;
+    const items = fieldPhotoItems(fieldWorkspace, localProject, localActiveArea, queued);
+    galleryObjectUrls.forEach(url => URL.revokeObjectURL(url));
+    galleryObjectUrls = [];
+    localGallery.replaceChildren();
+    localGalleryState.textContent = items.length ? `${items.length} foto · ${localActiveArea}` : `Nessuna foto · ${localActiveArea || 'nessun punto'}`;
+    if (!items.length) {
+      const empty = document.createElement('p'); empty.className = 'small'; empty.textContent = 'Nessuna foto scattata per questo punto.'; localGallery.append(empty); return;
+    }
+    for (const item of items) {
+      const card = document.createElement('article'); card.className = 'local-photo-card';
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'local-photo-thumb'; button.setAttribute('aria-label', 'Apri foto');
+      if (item.blob) {
+        const image = document.createElement('img'); image.loading = 'lazy'; image.alt = 'Foto sul telefono';
+        const url = URL.createObjectURL(item.blob); galleryObjectUrls.push(url); image.src = url; button.append(image);
+      } else {
+        const placeholder = document.createElement('span'); placeholder.className = 'local-photo-placeholder'; placeholder.textContent = '☁️\nFoto sul server'; button.append(placeholder);
+      }
+      button.addEventListener('click', () => openLocalPhoto(item));
+      const meta = document.createElement('div'); meta.className = 'local-photo-meta';
+      const source = document.createElement('span'); source.className = `local-photo-source${item.source === 'server' ? ' server' : ''}`; source.textContent = item.source === 'device' ? 'Sul telefono' : 'Sul server';
+      const size = document.createElement('span'); size.textContent = formatBytes(item.size || 0);
+      meta.append(source, size); card.append(button, meta); localGallery.append(card);
+    }
+  } catch (error) {
+    if (sequence !== galleryRenderSequence) return;
+    localGalleryState.textContent = 'Galleria non disponibile.';
+    localGallery.replaceChildren();
+    const message = document.createElement('p'); message.className = 'small'; message.textContent = error.message; localGallery.append(message);
+  }
+}
+
 async function uploadLocalPhoto(record) {
   const response = await fetch('/api/photos', {
     method: 'POST',
@@ -442,6 +514,7 @@ async function syncLocalPhotos() {
   } finally {
     localSyncBusy = false;
     await refreshLocalQueue();
+    await refreshLocalGallery({ reloadWorkspace: true });
   }
 }
 
@@ -460,11 +533,13 @@ async function captureLocalPhoto() {
     await queuePhoto(record);
     infoEl.textContent = `Foto salvata sul telefono • ${formatBytes(blob.size)}`;
     await refreshLocalQueue();
+    await refreshLocalGallery();
     if (uploadImmediately.checked) {
       infoEl.textContent = 'Caricamento foto…';
       await uploadLocalPhoto(record);
       infoEl.textContent = `Foto caricata in “${record.area}”.`;
       await refreshLocalQueue();
+      await refreshLocalGallery({ reloadWorkspace: true });
     }
   } catch (error) {
     infoEl.textContent = `Errore scatto: ${error.message}`;
@@ -490,6 +565,7 @@ function renderLocalSession(message) {
   if (message.activeArea && message.activeArea !== localActiveArea) sendSignal({ type: 'session-area', area: localActiveArea });
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
   void refreshLocalQueue();
+  void refreshLocalGallery();
 }
 
 function renderFieldAreas(project, preferredArea = '') {
@@ -499,6 +575,7 @@ function renderFieldAreas(project, preferredArea = '') {
   localActiveArea = areas.some(area => area.name === preferredArea) ? preferredArea : (areas[0]?.name || '');
   localAreaSelect.value = localActiveArea;
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
+  void refreshLocalGallery();
 }
 
 function renderFieldProjects(preferredProject = '') {
@@ -523,12 +600,11 @@ async function restoreLocalSession() {
 }
 
 async function initializeLocalSetup() {
-  const response = await fetch('/api/workspace');
-  if (!response.ok) throw new Error('Impossibile caricare progetti e punti dal server.');
-  fieldWorkspace = await response.json();
+  await fetchFieldWorkspace();
   renderFieldProjects();
   await restoreLocalSession();
   if (!localProject) throw new Error('Nessun progetto con punti aperti disponibile. Crealo o sincronizzalo dal controller.');
+  await refreshLocalGallery();
   infoEl.textContent = 'Scegli progetto e punto, poi avvia la fotocamera.';
 }
 
@@ -707,6 +783,7 @@ localAreaSelect.addEventListener('change', () => {
   if (localSessionBinding?.project === localProject) localSessionBinding.area = localActiveArea;
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
   sendSignal({ type: 'session-area', area: localActiveArea });
+  void refreshLocalGallery();
 });
 localProjectSelect.addEventListener('change', () => {
   localProject = localProjectSelect.value;
@@ -749,6 +826,18 @@ video.addEventListener('click', async event => {
 });
 localCaptureBtn.addEventListener('click', captureLocalPhoto);
 syncLocalPhotosBtn.addEventListener('click', syncLocalPhotos);
+refreshLocalGalleryBtn.addEventListener('click', () => void refreshLocalGallery({ reloadWorkspace: true }));
+closeLocalPhotoViewerBtn.addEventListener('click', closeLocalPhotoViewer);
+localPhotoViewer.addEventListener('click', event => { if (event.target === localPhotoViewer) closeLocalPhotoViewer(); });
+localPhotoViewer.addEventListener('close', () => {
+  localPhotoViewerImage.removeAttribute('src');
+  if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);
+  viewerObjectUrl = '';
+});
+window.addEventListener?.('pagehide', () => {
+  galleryObjectUrls.forEach(url => URL.revokeObjectURL(url));
+  if (viewerObjectUrl) URL.revokeObjectURL(viewerObjectUrl);
+});
 
 if (localMode) {
   localSetupReady = initializeLocalSetup().catch(error => {

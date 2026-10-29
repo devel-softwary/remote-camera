@@ -5,7 +5,7 @@ import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, 
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
-import { fieldAreas, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
+import { fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from '../public/field-session.js';
 
 assert.equal(isCadFile({ name: 'rilievo.DWG' }), true);
 assert.equal(isCadFile({ name: 'rilievo.pdf' }), false);
@@ -108,6 +108,11 @@ assert.deepEqual(fieldSessionRequest(fieldWorkspace, 'DAM', 'TR01_A_N001'), {
   areas: [{ name: 'TR01_A_N001', location: { tower: 'TR01', face: 'A', node: 'N001' } }], localMode: true
 });
 assert.equal(fieldSessionRequest(fieldWorkspace, 'DAM', 'Chiuso'), null);
+fieldWorkspace.areasByProject.DAM[0].photos = [{ id: 'server-1', url: '/uploads/DAM/photo.jpg', createdAt: '2026-10-28T10:00:00Z', size: 20 }, { url: 'https://invalid.test/photo.jpg' }];
+const queuedBlob = new Blob(['photo'], { type: 'image/jpeg' });
+const fieldPhotos = fieldPhotoItems(fieldWorkspace, 'DAM', 'TR01_A_N001', [{ id: 'queue-1', project: 'DAM', area: 'TR01_A_N001', blob: queuedBlob, createdAt: '2026-10-29T10:00:00Z' }]);
+assert.deepEqual(fieldPhotos.map(photo => [photo.id, photo.source]), [['queue-1', 'device'], ['server-1', 'server']]);
+assert.equal(fieldPhotos[0].blob, queuedBlob);
 assert.equal(nextAreaName([{ name: 'Pilastro nord' }], ' pilastro NORD '), '');
 assert.equal(nextAreaName([], ' Pilastro sud '), 'Pilastro sud');
 const area = createInterventionArea([], 'Pilastro sud');

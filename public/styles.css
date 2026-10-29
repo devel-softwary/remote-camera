@@ -77,6 +77,20 @@ body.local-mode .local-project-picker, body.local-mode .local-point-picker { dis
 body.local-mode .local-capture-overlay { display:grid; place-items:center; position:absolute; left:50%; bottom:16px; transform:translateX(-50%); width:76px; min-height:76px; padding:0; border:5px solid #fff; border-radius:50%; background:#3157e7; box-shadow:0 5px 22px #000c; font-size:1.7rem; }
 body.local-mode .local-capture-overlay:active:not(:disabled) { transform:translateX(-50%) scale(.94); }
 .local-flash-control, .local-diagnostics { margin-top:12px; }
+.local-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; margin-top:12px; }
+.local-gallery-section .section-heading button { min-height:38px; }
+.local-photo-card { min-width:0; }
+.local-photo-thumb { display:block; width:100%; height:auto; min-height:0; padding:0; overflow:hidden; border-color:#36425f; background:#080b14; }
+.local-photo-thumb img { display:block; width:100%; aspect-ratio:1; object-fit:cover; }
+.local-photo-placeholder { display:grid; place-items:center; width:100%; aspect-ratio:1; padding:10px; white-space:pre-line; color:#b8c0d9; line-height:1.5; }
+.local-photo-meta { display:flex; justify-content:space-between; gap:6px; margin-top:5px; color:#b8c0d9; font-size:.75rem; }
+.local-photo-source { color:#ffcf70; }
+.local-photo-source.server { color:#3ed598; }
+.local-photo-dialog { width:min(920px,calc(100% - 20px)); max-height:calc(100% - 20px); padding:0; color:#eef2ff; background:#12192b; border:1px solid #36425f; border-radius:18px; }
+.local-photo-dialog::backdrop { background:#050812e6; }
+.local-photo-dialog-content { padding:14px; }
+.local-photo-dialog-content .section-heading { margin-bottom:12px; }
+.local-photo-dialog-content img { display:block; max-width:100%; max-height:calc(100dvh - 110px); margin:auto; object-fit:contain; }
 .controller-shell { width:min(1600px, 100%); }
 .controller-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
 .controller-header h1 { margin:0; }
