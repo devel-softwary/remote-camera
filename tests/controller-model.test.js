@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, canStartPointSession, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from '../public/cad-viewer.js';
-import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, matchesSessionBinding } from '../session-policy.js';
+import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
@@ -80,12 +80,17 @@ assert.deepEqual(createAllowedSessionAreas('DAM', [
   { name: 'nodo 1', location: { tower: 2, face: 'B', node: 2 } },
   { name: '../vietato', location: { tower: 2, face: 'B', node: 2 } }
 ], { type: 'maradona' }), [{ name: 'Nodo 1', location: { tower: 'TR01', face: 'A', node: 'N001' } }]);
-const uploadSession = { project: 'DAM', area: 'Nodo 1', location: null, controllerToken: 'central', cameraToken: 'camera', localMode: true, expiresAt: 2000, allowedAreas: [{ name: 'Nodo 1', location: null }, { name: 'Nodo 2', location: null }] };
+const uploadSession = { project: 'DAM', area: 'Nodo 1', activeArea: 'Nodo 1', location: null, controllerToken: 'central', cameraToken: 'camera', localMode: true, expiresAt: 2000, allowedAreas: [{ name: 'Nodo 1', location: null }, { name: 'Nodo 2', location: null }] };
 const equalTokens = (actual, supplied) => actual === supplied;
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 1', controllerToken: 'central' }, equalTokens, 1999).role, 'controller');
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 2', cameraToken: 'camera' }, equalTokens, 1999).role, 'camera');
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 3', cameraToken: 'camera' }, equalTokens, 1999), null);
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 1', cameraToken: 'camera' }, equalTokens, 2000), null);
+assert.deepEqual(fieldSessionPayload(uploadSession, 'camera', equalTokens, 1999), {
+  project: 'DAM', activeArea: 'Nodo 1', areas: [{ name: 'Nodo 1' }, { name: 'Nodo 2' }], expiresAt: new Date(2000).toISOString()
+});
+assert.equal(fieldSessionPayload(uploadSession, 'wrong', equalTokens, 1999), null);
+assert.equal(fieldSessionPayload(uploadSession, 'camera', equalTokens, 2000), null);
 assert.equal(nextAreaName([{ name: 'Pilastro nord' }], ' pilastro NORD '), '');
 assert.equal(nextAreaName([], ' Pilastro sud '), 'Pilastro sud');
 const area = createInterventionArea([], 'Pilastro sud');

@@ -26,8 +26,6 @@ const localFocusDistanceGroup = document.querySelector('#localFocusDistanceGroup
 const localFocusDistanceValue = document.querySelector('#localFocusDistanceValue');
 const localFlashMode = document.querySelector('#localFlashMode');
 const localDiagnostics = document.querySelector('#localDiagnostics');
-const cameraOptions = document.querySelector('#cameraOptions');
-const localSecondaryControls = document.querySelector('#localSecondaryControls');
 const localCaptureBtn = document.querySelector('#localCapture');
 const uploadImmediately = document.querySelector('#uploadImmediately');
 const syncLocalPhotosBtn = document.querySelector('#syncLocalPhotos');
@@ -39,7 +37,6 @@ const authToken = queryParam('token');
 const localMode = queryParam('local') === '1';
 document.body?.classList.toggle('local-mode', localMode);
 localControls.hidden = !localMode;
-if (localMode) localSecondaryControls.querySelector('summary').after(cameraOptions);
 if (localMode) infoEl.textContent = 'Avvia la fotocamera per iniziare il rilievo locale.';
 if (!window.isSecureContext) secureWarning.classList.remove('hidden');
 
@@ -60,6 +57,7 @@ let localTorchOn = false;
 let localSyncBusy = false;
 let photoCapabilities = {};
 let flashMode = 'off';
+let localSessionReady;
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -474,15 +472,34 @@ async function captureLocalPhoto() {
 function renderLocalSession(message) {
   if (!localMode) return;
   localProject = message.project || localProject;
-  localActiveArea = message.activeArea || localActiveArea;
   const areas = Array.isArray(message.areas) ? message.areas : [];
+  const selectedBeforeRender = localAreaSelect.value;
   if (areas.length) {
     localAreaSelect.replaceChildren(...areas.map(area => new Option(area.name, area.name)));
     localAreaSelect.disabled = false;
   }
-  localAreaSelect.value = areas.some(area => area.name === localActiveArea) ? localActiveArea : localAreaSelect.value;
+  localActiveArea = areas.some(area => area.name === selectedBeforeRender)
+    ? selectedBeforeRender
+    : (areas.some(area => area.name === message.activeArea) ? message.activeArea : (areas[0]?.name || localActiveArea));
+  localAreaSelect.value = localActiveArea;
+  if (message.activeArea && message.activeArea !== localActiveArea) sendSignal({ type: 'session-area', area: localActiveArea });
   localCaptureBtn.disabled = !currentTrack || !localActiveArea || photoBusy;
   void refreshLocalQueue();
+}
+
+function ensureLocalSession() {
+  if (!localMode) return Promise.resolve();
+  if (!localSessionReady) {
+    localSessionReady = fetch('/api/field-session', { headers: { 'x-room': room, 'x-camera-token': authToken } })
+      .then(async response => {
+        if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Sessione locale non disponibile.');
+        const message = await response.json();
+        renderLocalSession(message);
+        return message;
+      })
+      .catch(error => { localSessionReady = undefined; throw error; });
+  }
+  return localSessionReady;
 }
 
 async function handleCommand(msg) {
@@ -532,12 +549,13 @@ function scheduleReconnect(closeCode) {
 function connectWs() {
   resetPeerConnections();
   const socket = ws = new WebSocket(wsUrl());
+  let terminalConnectionMessage = '';
   socket.onopen = () => sendSignal({ type: 'join', room, role: 'camera', token: authToken, localMode });
   socket.onclose = e => {
     if (socket !== ws) return;
     ws = undefined;
     if (!canRetryConnection(e.code)) {
-      setStatus(statusEl, e.code === 4001 ? 'Camera sostituita da un altro dispositivo' : 'Pairing non valido/scaduto', 'warn');
+      setStatus(statusEl, terminalConnectionMessage || (e.code === 4001 ? 'Camera sostituita da un altro dispositivo' : 'Pairing non valido/scaduto'), 'warn');
       return;
     }
     scheduleReconnect(e.code);
@@ -547,7 +565,7 @@ function connectWs() {
     if (socket !== ws) return;
     const msg = JSON.parse(event.data);
     try {
-      if (msg.type === 'error') throw new Error(msg.message);
+      if (msg.type === 'error') { terminalConnectionMessage = msg.message; throw new Error(msg.message); }
       if (msg.type === 'joined') {
         reconnectAttempt = 0;
         setStatus(statusEl, `Pairing ${msg.room} riuscito`, 'ok');
@@ -589,6 +607,7 @@ function connectWs() {
 
 async function start() {
   if (!room || !authToken) throw new Error('Link di pairing incompleto. Scansiona il QR del controller.');
+  if (localMode) await ensureLocalSession();
   if (!window.isSecureContext) throw new Error('La fotocamera richiede un link HTTPS con certificato attendibile sul telefono. Apri il controller tramite HTTPS e genera un nuovo QR.');
   if (!navigator.mediaDevices?.getUserMedia) throw new Error('Fotocamera non disponibile in questo browser. Apri il link in Safari su iPhone o Chrome su Android, fuori dal lettore QR o dalle app di messaggistica.');
   setStatus(statusEl, 'Autorizza la fotocamera', 'warn');
@@ -666,6 +685,12 @@ video.addEventListener('click', async event => {
 });
 localCaptureBtn.addEventListener('click', captureLocalPhoto);
 syncLocalPhotosBtn.addEventListener('click', syncLocalPhotos);
+
+if (localMode) {
+  void ensureLocalSession()
+    .then(() => { infoEl.textContent = 'Punti caricati. Scegli il punto e avvia la fotocamera.'; })
+    .catch(error => { infoEl.textContent = error.message; setStatus(statusEl, 'Sessione locale non disponibile', 'warn'); });
+}
 
 startBtn.addEventListener('click', async () => {
   if (startBtn.disabled) return;

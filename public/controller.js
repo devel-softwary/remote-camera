@@ -924,8 +924,9 @@ projectSelect.addEventListener('change', () => { pendingPhotoPoint = null; addin
 areaSelect.addEventListener('change', () => { renderAreas(); publishActiveArea(); });
 startPointSessionBtn.addEventListener('click', startSessionForSelectedPoint);
 startLocalSessionBtn.addEventListener('click', async () => {
+  if (!currentArea() || !(await syncWorkspace())) return;
   const area = currentArea();
-  if (!area || !(await syncWorkspace())) return;
+  if (!area) { window.alert('Il punto selezionato non è più disponibile. Selezionalo nuovamente.'); renderAreas(); return; }
   startLocalSessionBtn.disabled = true;
   try {
     await createSession(area, true);

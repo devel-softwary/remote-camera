@@ -8,7 +8,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import archiver from 'archiver';
-import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding } from './session-policy.js';
+import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload } from './session-policy.js';
 import { photoProjectStorageName, photoStorageDirectory, safeCaptureId, safeFolderName } from './storage-policy.js';
 import { savePhotoFile } from './photo-storage.js';
 import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
@@ -65,6 +65,14 @@ app.get('/api/config', (req, res) => {
     });
   }
   res.json({ baseUrl: base.replace(/\/$/, ''), iceServers, sessionTtlMs: SESSION_TTL_MS });
+});
+
+app.get('/api/field-session', (req, res) => {
+  pruneSessions();
+  const room = String(req.get('x-room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  const payload = fieldSessionPayload(sessions.get(room), String(req.get('x-camera-token') || ''), tokensEqual);
+  if (!payload) return res.status(401).json({ message: 'Sessione locale non valida o scaduta. Torna al progetto e premi “Usa questo telefono”.' });
+  res.json(payload);
 });
 
 app.get('/api/workspace', (_req, res) => {

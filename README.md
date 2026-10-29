@@ -94,7 +94,7 @@ Per TURN TLS puoi usare, per esempio, `turns:turn.example.com:5349` se il server
 6. Per un'altra area, selezionala nel controller: la camera resta connessa e le foto finiscono nella rispettiva cartella.
 7. Con la sessione aperta, seleziona il progetto e premi **Scarica ZIP** per salvarne tutte le foto sul computer del browser.
 
-Per lavorare senza secondo dispositivo, seleziona un punto e premi **Usa questo telefono**. Ogni scatto entra prima nella coda locale. Premi **Sincronizza ora** quando vuoi usare la rete, oppure abilita **Carica subito**.
+Per lavorare senza secondo dispositivo, seleziona un punto e premi **Apri modalità singolo telefono**. Ogni scatto entra prima nella coda locale. Premi **Sincronizza ora** quando vuoi usare la rete, oppure abilita **Carica subito**.
 
 Zoom, torcia, autofocus, focus manuale, touch-to-focus e flash fotografico compaiono solo quando supportati dal browser e dalla camera. **Torcia** è luce continua; **Flash foto** viene applicato allo scatto tramite Image Capture.
 

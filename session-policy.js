@@ -39,3 +39,13 @@ export function authorizePhotoUpload(session, request, tokensEqual, now = Date.n
   const area = session.allowedAreas.find(item => item.name === request.area);
   return area ? { role: 'camera', area } : null;
 }
+
+export function fieldSessionPayload(session, cameraToken, tokensEqual, now = Date.now()) {
+  if (!session?.localMode || now >= session.expiresAt || !tokensEqual(session.cameraToken, cameraToken)) return null;
+  return {
+    project: session.project,
+    activeArea: session.activeArea,
+    areas: session.allowedAreas.map(area => ({ name: area.name })),
+    expiresAt: new Date(session.expiresAt).toISOString()
+  };
+}

@@ -11,7 +11,9 @@
     <button id="start">Consenti camera e collega</button>
     <p id="secureWarning" class="notice small hidden">La camera richiede HTTPS (eccetto localhost).</p>
   </section>
-  <section class="card camera-preview-card"><div class="local-camera-stage"><video id="localVideo" autoplay playsinline muted></video>
+  <section class="card camera-preview-card">
+    <label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Caricamento punti…</option></select></label>
+    <div class="local-camera-stage"><video id="localVideo" autoplay playsinline muted></video>
       <button id="localCapture" class="capture local-capture-overlay" type="button" disabled aria-label="Scatta foto"><span aria-hidden="true">📷</span><span class="sr-only">Scatta foto</span></button>
     </div>
     <p id="info" class="small camera-live-info" aria-live="polite">I controlli saranno gestiti dal dispositivo remoto.</p>
@@ -22,8 +24,7 @@
     </details>
   </section>
   <section id="localControls" class="card local-field-controls" hidden>
-    <div class="section-heading"><h2>Scatto sul campo</h2><span class="small">Scegli il punto prima di scattare</span></div>
-    <label class="local-point-picker" for="localAreaSelect">Punto foto attivo<select id="localAreaSelect" disabled><option>Connessione in corso…</option></select></label>
+    <div class="section-heading"><h2>Comandi fotocamera</h2><span class="small">Regolazioni rapide</span></div>
     <div class="local-primary-grid">
       <label id="localZoomGroup">Zoom <span id="localZoomValue" class="value">N/D</span><input id="localZoom" type="range" min="1" max="1" step="0.1" value="1" disabled></label>
       <label id="localFocusDistanceGroup">Focus manuale <span id="localFocusDistanceValue" class="value">N/D</span><input id="localFocusDistance" type="range" disabled></label>
@@ -32,13 +33,9 @@
       <button id="localFocus" class="secondary" type="button" disabled>◎ Autofocus</button>
       <button id="localTorch" class="secondary" type="button" disabled>🔦 Torcia OFF</button>
     </div>
-    <details id="localSecondaryControls" class="local-secondary-controls"><summary>Illuminazione e altre opzioni</summary>
-      <div class="control-grid">
-        <label>Flash foto<select id="localFlashMode" disabled><option value="">N/D</option></select></label>
-      </div>
-      <label class="inline-option"><input id="uploadImmediately" type="checkbox"> Carica subito dopo lo scatto (usa dati)</label>
-      <div class="capture-bar"><button id="syncLocalPhotos" class="secondary" type="button" disabled>Sincronizza ora</button><span id="localQueueInfo" class="small">Nessuna foto in attesa.</span></div>
-      <h3>Diagnostica fotocamera</h3><p id="localDiagnostics" class="small diagnostics">In attesa delle capacità della camera.</p>
-    </details>
+    <label class="local-flash-control">Flash foto<select id="localFlashMode" disabled><option value="">N/D</option></select></label>
+    <label class="inline-option"><input id="uploadImmediately" type="checkbox"> Carica subito dopo lo scatto (usa dati)</label>
+    <div class="capture-bar"><button id="syncLocalPhotos" class="secondary" type="button" disabled>Sincronizza ora</button><span id="localQueueInfo" class="small">Nessuna foto in attesa.</span></div>
+    <details class="local-diagnostics"><summary>Diagnostica fotocamera</summary><p id="localDiagnostics" class="small diagnostics">In attesa delle capacità della camera.</p></details>
   </section>
 </main><script type="module" src="/camera.js"></script></body></html>

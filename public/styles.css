@@ -64,8 +64,9 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .diagnostics { white-space:pre-line; }
 .touch-focus { cursor:crosshair; }
 .camera-options { margin-top:10px; }
-.camera-options summary, .local-secondary-controls summary { cursor:pointer; color:#cbd3e7; font-weight:700; padding:8px 0; }
-.local-point-picker { margin-top:10px; }
+.camera-options summary, .local-diagnostics summary { cursor:pointer; color:#cbd3e7; font-weight:700; padding:8px 0; }
+.local-point-picker { display:none; margin-bottom:10px; }
+body.local-mode .local-point-picker { display:grid; }
 .local-point-picker select { min-height:54px; font-size:1.05rem; font-weight:700; border-color:#7694ff; }
 .local-camera-stage { position:relative; }
 .local-camera-stage video { display:block; }
@@ -75,8 +76,7 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .local-capture-overlay { display:none; }
 body.local-mode .local-capture-overlay { display:grid; place-items:center; position:absolute; left:50%; bottom:16px; transform:translateX(-50%); width:76px; min-height:76px; padding:0; border:5px solid #fff; border-radius:50%; background:#3157e7; box-shadow:0 5px 22px #000c; font-size:1.7rem; }
 body.local-mode .local-capture-overlay:active:not(:disabled) { transform:translateX(-50%) scale(.94); }
-.local-secondary-controls { margin-top:10px; border-top:1px solid #25304d; }
-.local-secondary-controls h3 { margin-bottom:0; }
+.local-flash-control, .local-diagnostics { margin-top:12px; }
 .controller-shell { width:min(1600px, 100%); }
 .controller-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
 .controller-header h1 { margin:0; }
@@ -153,7 +153,6 @@ body.local-mode .local-capture-overlay:active:not(:disabled) { transform:transla
   body.local-mode #localVideo { height:46dvh; max-height:460px; aspect-ratio:auto; }
   body.local-mode .camera-live-info { margin:7px 4px 0; min-height:24px; }
   body.local-mode .camera-options { margin:0 4px; }
-  body.local-mode #localControls { position:sticky; z-index:20; bottom:8px; margin-top:8px; padding:12px; border-color:#526aa8; box-shadow:0 -10px 32px #050811d9; }
+  body.local-mode #localControls { margin-top:8px; padding:12px; border-color:#526aa8; }
   body.local-mode #localControls h2 { margin:0; font-size:1.15rem; }
-  body.local-mode .local-secondary-controls[open] { max-height:35dvh; overflow:auto; }
 }
