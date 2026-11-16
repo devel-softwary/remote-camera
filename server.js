@@ -8,9 +8,9 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { WebSocketServer, WebSocket } from 'ws';
 import archiver from 'archiver';
-import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload } from './session-policy.js';
+import { authorizePhotoDelete, authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload } from './session-policy.js';
 import { photoProjectStorageName, photoStorageDirectory, safeCaptureId, safeFolderName } from './storage-policy.js';
-import { savePhotoFile } from './photo-storage.js';
+import { deletePhotoFile, savePhotoFile } from './photo-storage.js';
 import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
@@ -112,6 +112,16 @@ function findFieldPhotoMetadata(project, areaName, captureId) {
   } catch { return null; }
 }
 
+function deleteFieldPhotoMetadata(project, areaName, url) {
+  try {
+    const workspace = readWorkspace(workspaceFile);
+    const area = workspace.areasByProject[project]?.find(item => item.name === areaName);
+    if (!area?.photos?.length) return;
+    area.photos = area.photos.filter(photo => photo.url !== url);
+    writeWorkspace(workspaceFile, workspace);
+  } catch (error) { console.error('Field photo metadata deletion failed:', error); }
+}
+
 app.post('/api/session', (req, res) => {
   pruneSessions();
   const binding = createSessionBinding(safeFolderName(req.body?.project), safeFolderName(req.body?.area));
@@ -181,6 +191,29 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
     res.status(201).json(saved);
   }
   catch (error) { console.error('Photo storage failed:', error); res.status(500).json({ message: 'Salvataggio foto non riuscito.' }); }
+});
+
+app.delete('/api/photos', (req, res) => {
+  const room = String(req.get('x-room') || '').toUpperCase();
+  const project = safeFolderName(req.get('x-project'));
+  const areaName = safeFolderName(req.get('x-area'));
+  const session = sessions.get(room);
+  const area = authorizePhotoDelete(session, {
+    project, area: areaName, location: req.body?.location, controllerToken: String(req.get('x-controller-token') || '')
+  }, tokensEqual);
+  if (!area) return res.status(401).json({ message: 'Eliminazione foto non autorizzata.' });
+  const photoUrl = typeof req.body?.url === 'string' ? req.body.url : '';
+  try {
+    const storageSession = { ...session, area: area.name, location: area.location };
+    deletePhotoFile(uploadsDir, storageSession, photoUrl);
+    for (const [key, saved] of session.savedCaptures) if (saved.url === photoUrl) session.savedCaptures.delete(key);
+    deleteFieldPhotoMetadata(project, areaName, photoUrl);
+    res.status(204).end();
+  } catch (error) {
+    if (error.message === 'Percorso foto non valido.') return res.status(400).json({ message: error.message });
+    console.error('Photo deletion failed:', error);
+    res.status(500).json({ message: 'Eliminazione foto non riuscita.' });
+  }
 });
 
 function authorizedDownloadProject(req) {

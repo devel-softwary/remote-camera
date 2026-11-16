@@ -40,6 +40,16 @@ export function authorizePhotoUpload(session, request, tokensEqual, now = Date.n
   return area ? { role: 'camera', area } : null;
 }
 
+export function authorizePhotoDelete(session, request, tokensEqual, now = Date.now()) {
+  if (!session || now >= session.expiresAt || request.project !== session.project) return null;
+  if (!tokensEqual(session.controllerToken, request.controllerToken)) return null;
+  const area = session.allowedAreas?.find(item => item.name === request.area);
+  if (area) return area;
+  if (session.area === request.area) return { name: session.area, location: session.location };
+  const storage = createSessionStorageBinding(session.workProfile, request.location);
+  return safeFolderName(request.area) && storage ? { name: request.area, location: storage.location } : null;
+}
+
 export function fieldSessionPayload(session, cameraToken, tokensEqual, now = Date.now()) {
   if (!session?.localMode || now >= session.expiresAt || !tokensEqual(session.cameraToken, cameraToken)) return null;
   return {

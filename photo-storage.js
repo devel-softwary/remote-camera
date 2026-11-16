@@ -30,3 +30,29 @@ export function savePhotoFile(uploadsDir, session, contentType, data, now = Date
   }
   throw new Error('Numero massimo di fotogrammi raggiunto.');
 }
+
+export function photoFilePath(uploadsDir, session, photoUrl) {
+  const plan = photoStoragePlan(uploadsDir, session, 'image/jpeg');
+  if (!plan) return '';
+  const prefix = photoPublicUrl(plan.segments, '');
+  const value = String(photoUrl || '');
+  if (!value.startsWith(prefix) || value.length > 2048) return '';
+  let filename;
+  try { filename = decodeURIComponent(value.slice(prefix.length)); }
+  catch { return ''; }
+  const validFilename = plan.filenamePrefix
+    ? filename.startsWith(`${plan.filenamePrefix}_fotogramma`) && /^\d{2,6}\.(?:jpg|png|webp)$/.test(filename.slice(`${plan.filenamePrefix}_fotogramma`.length))
+    : /^\d{1,16}-[a-f0-9]{12}\.(?:jpg|png|webp)$/.test(filename);
+  if (!validFilename) return '';
+  return path.join(plan.folder, filename);
+}
+
+export function deletePhotoFile(uploadsDir, session, photoUrl) {
+  const filename = photoFilePath(uploadsDir, session, photoUrl);
+  if (!filename) throw new Error('Percorso foto non valido.');
+  try { fs.unlinkSync(filename); return true; }
+  catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}

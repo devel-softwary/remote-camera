@@ -791,9 +791,38 @@ function renderGallery() {
       const downloadIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); downloadIcon.setAttribute('viewBox', '0 0 24 24'); downloadIcon.setAttribute('aria-hidden', 'true'); downloadIcon.setAttribute('focusable', 'false');
       const downloadPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); downloadPath.setAttribute('d', 'M12 3v11m0 0 4-4m-4 4-4-4m-3 7v3h14v-3'); downloadIcon.append(downloadPath);
       link.append(downloadIcon);
-      actions.append(view, link); figure.append(imageFrame, meta, actions); items.append(figure);
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'danger gallery-icon-button'; remove.title = `Elimina foto ${area.name}`; remove.setAttribute('aria-label', remove.title);
+      const removeIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); removeIcon.setAttribute('viewBox', '0 0 24 24'); removeIcon.setAttribute('aria-hidden', 'true'); removeIcon.setAttribute('focusable', 'false');
+      for (const data of ['M3 6h18', 'M8 6V4h8v2', 'M6 6l1 14h10l1-14', 'M10 10v6', 'M14 10v6']) { const path = document.createElementNS(removeIcon.namespaceURI, 'path'); path.setAttribute('d', data); removeIcon.append(path); }
+      remove.append(removeIcon); remove.addEventListener('click', () => void deleteGalleryPhoto(photo, area, remove));
+      actions.append(view, link, remove); figure.append(imageFrame, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
+  }
+}
+
+async function deleteGalleryPhoto(photo, area, button) {
+  if (!window.confirm(`Eliminare definitivamente questa foto da “${area.name}”?`)) return;
+  button.disabled = true;
+  try {
+    const project = projectSelect.value;
+    if (!session || session.project !== project) await createSession(area);
+    const requestDeletion = () => fetch('/api/photos', {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': project, 'x-area': area.name },
+      body: JSON.stringify({ url: photo.url, location: area.location || null })
+    });
+    let response = await requestDeletion();
+    if (response.status === 401) { await createSession(area); response = await requestDeletion(); }
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Eliminazione non riuscita.');
+    area.photos = area.photos.filter(item => item !== photo && item.url !== photo.url);
+    if (photo.thumbnailKey) await deleteThumbnail(photo.thumbnailKey).catch(() => {});
+    saveWorkspace();
+    renderAreas();
+    captureState.textContent = `Foto eliminata da “${area.name}”.`;
+  } catch (error) {
+    window.alert(error.message);
+    button.disabled = false;
   }
 }
 

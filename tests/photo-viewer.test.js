@@ -11,6 +11,8 @@ assert.equal(clampPhotoZoom(.75, { min: .25, max: 1 }), .75);
 const controllerSource = await readFile(new URL('../public/controller.js', import.meta.url), 'utf8');
 assert.match(controllerSource, /view\.title = `Visualizza foto \$\{area\.name\}`/);
 assert.match(controllerSource, /link\.title = `Scarica foto \$\{area\.name\}`/);
+assert.match(controllerSource, /remove\.title = `Elimina foto \$\{area\.name\}`/);
+assert.match(controllerSource, /method: 'DELETE'/);
 assert.doesNotMatch(controllerSource, /👁 Visualizza|link\.append\(downloadIcon, 'Scarica'\)/);
 
 console.log('Photo viewer zoom regression passed');

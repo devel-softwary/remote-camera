@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { MAX_CAD_SIZE, MAX_LAYER_IMAGE_SIZE, cadValidationError, canCaptureArea, canDownloadProject, canManageAreas, canStartPointSession, isCadFile, isLayerImage, isProjectSelected, layerFileKind, layerValidationError, linkPhotoPointsToAreas, nextPhotoPointName, nextProjectName, removePhotoPoint, renamePhotoPoint } from '../public/controller-model.js';
 import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from '../public/cad-viewer.js';
-import { authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload, matchesSessionBinding } from '../session-policy.js';
+import { authorizePhotoDelete, authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload, matchesSessionBinding } from '../session-policy.js';
 import { canCreateMappedArea, createInterventionArea, createMappedInterventionArea, nextAreaName, normalizeAreaVertices, openAreaForProject, reopenInterventionArea } from '../public/controller-model.js';
 import { photoExtension, safeFolderName } from '../storage-policy.js';
 import { HELP_STEPS } from '../public/help-content.js';
@@ -84,6 +84,10 @@ assert.deepEqual(createAllowedSessionAreas('DAM', [
 const uploadSession = { project: 'DAM', area: 'Nodo 1', activeArea: 'Nodo 1', location: null, controllerToken: 'central', cameraToken: 'camera', localMode: true, expiresAt: 2000, allowedAreas: [{ name: 'Nodo 1', location: null }, { name: 'Nodo 2', location: null }] };
 const equalTokens = (actual, supplied) => actual === supplied;
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 1', controllerToken: 'central' }, equalTokens, 1999).role, 'controller');
+assert.equal(authorizePhotoDelete(uploadSession, { project: 'DAM', area: 'Nodo 2', controllerToken: 'central' }, equalTokens, 1999).name, 'Nodo 2');
+assert.equal(authorizePhotoDelete(uploadSession, { project: 'DAM', area: 'Nodo 2', controllerToken: 'wrong' }, equalTokens, 1999), null);
+assert.equal(authorizePhotoDelete(uploadSession, { project: 'Altro', area: 'Nodo 2', controllerToken: 'central' }, equalTokens, 1999), null);
+assert.equal(authorizePhotoDelete(uploadSession, { project: 'DAM', area: 'Nodo 2', controllerToken: 'central' }, equalTokens, 2000), null);
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 2', cameraToken: 'camera' }, equalTokens, 1999).role, 'camera');
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 3', cameraToken: 'camera' }, equalTokens, 1999), null);
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 1', cameraToken: 'camera' }, equalTokens, 2000), null);
