@@ -77,19 +77,27 @@ export function maradonaNodeArea(session, areaName) {
   return area && location ? { name: area.name, location } : null;
 }
 
-export function fillNodeTemplateWorksheet(template, { jobCode = 'XXXX', location, photos = [] }) {
+export function formatSurveyDate(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error('Data rilievo non valida.');
+  return new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+}
+
+export function fillNodeTemplateWorksheet(template, { jobCode = 'XXXX', location, photos = [], surveyDate = new Date() }) {
   const value = normalizeMaradonaLocation(location);
   if (!value) throw new Error('Nodo Maradona non valido.');
   let sheet = String(template || '');
   sheet = replaceCell(sheet, 'C5', jobCode);
   sheet = replaceCell(sheet, 'H5', value.tower);
   sheet = replaceCell(sheet, 'F6', `${value.face} ${value.node.slice(1)}`);
+  sheet = replaceCell(sheet, 'K7', formatSurveyDate(surveyDate));
+  sheet = replaceCell(sheet, 'N7', 'SMARIG SRL');
   sheet = sheet.replace('sqref="F6"', 'sqref="K6"');
   const hyperlinks = [];
   photos.slice(0, PHOTO_SLOTS.length).forEach((photo, index) => {
     const slot = PHOTO_SLOTS[index];
-    sheet = replaceCell(sheet, slot.link, `Apri FOTO ${index + 1}`);
-    sheet = replaceCell(sheet, slot.name, photo.filename);
+    sheet = replaceCell(sheet, slot.link, photo.publicUrl);
+    sheet = replaceCell(sheet, slot.name, `Nome file foto ${index + 1}: ${photo.filename}`);
     hyperlinks.push(`<hyperlink ref="${slot.link}" r:id="rId${index + 1}"/><hyperlink ref="${slot.name}" r:id="rId${index + 1}"/>`);
   });
   const extra = photos.slice(PHOTO_SLOTS.length);
@@ -111,12 +119,12 @@ export function nodeExcelRelationshipsXml(photos = []) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${photos.map((photo, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${xml(photo.publicUrl)}" TargetMode="External"/>`).join('')}</Relationships>`;
 }
 
-export function createNodeExcel({ jobCode, location, photos, templatePath = DEFAULT_TEMPLATE }) {
+export function createNodeExcel({ jobCode, location, photos, surveyDate = new Date(), templatePath = DEFAULT_TEMPLATE }) {
   const entries = readXlsxEntries(fs.readFileSync(templatePath));
   const replacements = new Map();
   const sheetEntry = entries.find(entry => entry.name === 'xl/worksheets/sheet1.xml');
   if (!sheetEntry) throw new Error('Foglio principale assente nel modello Excel.');
-  replacements.set(sheetEntry.name, Buffer.from(fillNodeTemplateWorksheet(sheetEntry.data.toString('utf8'), { jobCode, location, photos })));
+  replacements.set(sheetEntry.name, Buffer.from(fillNodeTemplateWorksheet(sheetEntry.data.toString('utf8'), { jobCode, location, photos, surveyDate })));
   replacements.set('xl/worksheets/_rels/sheet1.xml.rels', Buffer.from(nodeExcelRelationshipsXml(photos)));
   if (photos.length > PHOTO_SLOTS.length) {
     const workbookEntry = entries.find(entry => entry.name === 'xl/workbook.xml');

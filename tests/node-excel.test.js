@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createNodeExcel, fillNodeTemplateWorksheet, maradonaNodeArea, nodeExcelFilename, nodeExcelRelationshipsXml, readXlsxEntries } from '../node-excel.js';
+import { createNodeExcel, fillNodeTemplateWorksheet, formatSurveyDate, maradonaNodeArea, nodeExcelFilename, nodeExcelRelationshipsXml, readXlsxEntries } from '../node-excel.js';
 
 const location = { tower: 1, face: 'a', node: 7 };
 const photos = [
@@ -16,7 +16,8 @@ assert.equal(maradonaNodeArea({ ...session, workProfile: { type: 'generic' } }, 
 const relationships = nodeExcelRelationshipsXml(photos);
 assert.match(relationships, /TargetMode="External"/);
 assert.match(relationships, /x=1&amp;y=2/);
-const workbook = await createNodeExcel({ jobCode: 'XXXX', location, photos });
+assert.equal(formatSurveyDate('2026-11-16T12:00:00Z'), '16/11/2026');
+const workbook = await createNodeExcel({ jobCode: 'XXXX', location, photos, surveyDate: '2026-11-16T12:00:00Z' });
 assert.deepEqual([...workbook.subarray(0, 2)], [0x50, 0x4b]);
 assert.ok(workbook.length > 10_000);
 const entries = readXlsxEntries(workbook);
@@ -26,8 +27,10 @@ assert.match(sharedStrings, /SCHEDA DI RILIEVO NODO BULLONATO/);
 assert.match(sheet, /r="C5"[^>]*t="inlineStr"[^>]*><is><t>XXXX<\/t>/);
 assert.match(sheet, /r="H5"[^>]*t="inlineStr"[^>]*><is><t>TR01<\/t>/);
 assert.match(sheet, /r="F6"[^>]*t="inlineStr"[^>]*><is><t>A 007<\/t>/);
-assert.match(sheet, /Apri FOTO 1/);
-assert.match(sheet, /TR01_A_N007_01\.jpg/);
+assert.match(sheet, /r="K7"[^>]*t="inlineStr"[^>]*><is><t>16\/11\/2026<\/t>/);
+assert.match(sheet, /r="N7"[^>]*t="inlineStr"[^>]*><is><t>SMARIG SRL<\/t>/);
+assert.match(sheet, /https:\/\/camera\.example\.com\/uploads\/DAM\/TR01\/A\/N007\/TR01_A_N007_01\.jpg/);
+assert.match(sheet, /Nome file foto 1: TR01_A_N007_01\.jpg/);
 assert.match(sheet, /hyperlink ref="B16" r:id="rId1"/);
 assert.match(sheet, /hyperlink ref="B28" r:id="rId1"/);
 assert.match(sheet, /sqref="K6"/);
