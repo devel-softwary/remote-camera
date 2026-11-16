@@ -781,10 +781,10 @@ async function uploadPhotoToServer({ blob, meta, selectedArea, context }) {
   try {
     await saveThumbnail(thumbnailKey, await createThumbnail(blob));
   } catch { /* l'originale resta disponibile anche se lo storage del browser è pieno */ }
-  area.photos.push({ id: photoId, captureId: meta.requestId, url: saved.url, thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
+  area.photos.push({ id: photoId, captureId: meta.requestId, url: saved.url, ...(saved.publicUrl ? { publicUrl: saved.publicUrl } : {}), thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
   renderAreas();
-  if (session?.room === context.room) sendSignal({ type: 'photo-saved', area: area.name, photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
+  if (session?.room === context.room) sendSignal({ type: 'photo-saved', area: area.name, photo: { url: saved.url, ...(saved.publicUrl ? { publicUrl: saved.publicUrl } : {}), createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
   return { areaName: area.name, size: blob.size };
 }
 

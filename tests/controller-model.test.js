@@ -113,11 +113,12 @@ assert.deepEqual(fieldSessionRequest(fieldWorkspace, 'DAM', 'TR01_A_N001'), {
   areas: [{ name: 'TR01_A_N001', location: { tower: 'TR01', face: 'A', node: 'N001' } }], localMode: true
 });
 assert.equal(fieldSessionRequest(fieldWorkspace, 'DAM', 'Chiuso'), null);
-fieldWorkspace.areasByProject.DAM[0].photos = [{ id: 'server-1', url: '/uploads/DAM/photo.jpg', createdAt: '2026-10-28T10:00:00Z', size: 20 }, { url: 'https://invalid.test/photo.jpg' }];
+fieldWorkspace.areasByProject.DAM[0].photos = [{ id: 'server-1', url: '/uploads/DAM/photo.jpg', publicUrl: 'https://camera.example.com/uploads/DAM/photo.jpg', createdAt: '2026-10-28T10:00:00Z', size: 20 }, { url: 'https://invalid.test/photo.jpg' }];
 const queuedBlob = new Blob(['photo'], { type: 'image/jpeg' });
 const fieldPhotos = fieldPhotoItems(fieldWorkspace, 'DAM', 'TR01_A_N001', [{ id: 'queue-1', project: 'DAM', area: 'TR01_A_N001', blob: queuedBlob, createdAt: '2026-10-29T10:00:00Z' }]);
 assert.deepEqual(fieldPhotos.map(photo => [photo.id, photo.source]), [['queue-1', 'device'], ['server-1', 'server']]);
 assert.equal(fieldPhotos[0].blob, queuedBlob);
+assert.equal(fieldPhotos[1].publicUrl, 'https://camera.example.com/uploads/DAM/photo.jpg');
 const newGenericProject = createFieldProject({ projects: [], areasByProject: {}, projectProfilesByProject: {} }, { name: 'Via Cleopatra', type: 'generic', pointName: 'Pilastro nord' }, () => 'area-1');
 assert.equal(newGenericProject.project, 'Via Cleopatra');
 assert.deepEqual(newGenericProject.workspace.areasByProject['Via Cleopatra'][0], { id: 'area-1', name: 'Pilastro nord', status: 'open', photos: [] });

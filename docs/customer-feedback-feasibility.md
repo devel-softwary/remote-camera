@@ -149,7 +149,7 @@ Riferimenti: [Android Storage Access Framework](https://developer.android.com/tr
 - Validazione server di range ed enum Maradona.
 - Verifica reale del formato immagine, non solo `Content-Type`.
 - Limite dimensione, rate limit e quota per sessione.
-- Originali non pubblici su URL prevedibili; download autorizzato.
+- Originali disponibili tramite URL pubblico assoluto per i collegamenti Excel; pubblicare il servizio solo in HTTPS e considerare il link come dato condivisibile.
 - Retry idempotenti e scrittura atomica.
 - Cifratura HTTPS obbligatoria.
 - Cancellazione della coda locale solo dopo conferma server verificata.

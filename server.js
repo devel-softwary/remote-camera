@@ -11,6 +11,7 @@ import archiver from 'archiver';
 import { authorizePhotoDelete, authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload } from './session-policy.js';
 import { photoProjectStorageName, photoStorageDirectory, safeCaptureId, safeFolderName } from './storage-policy.js';
 import { deletePhotoFile, savePhotoFile } from './photo-storage.js';
+import { normalizePublicBaseUrl, publicPhotoUrl } from './public-photo-url.js';
 import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
@@ -21,13 +22,17 @@ const app = express();
 const port = Number(process.env.PORT || 3000);
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS || 10 * 60 * 1000);
 const FIELD_SESSION_TTL_MS = Number(process.env.FIELD_SESSION_TTL_MS || 7 * 24 * 60 * 60 * 1000);
+const configuredPublicBaseUrl = normalizePublicBaseUrl(process.env.PUBLIC_BASE_URL);
 
 app.disable('x-powered-by');
 app.use(express.json({ limit: '512kb' }));
 app.use(express.static(path.join(__dirname, 'public'), publicStaticOptions));
 const uploadsDir = photoStorageDirectory(process.env.PHOTO_STORAGE_DIR, path.join(__dirname, 'uploads'));
 const workspaceFile = path.resolve(process.env.WORKSPACE_STORAGE_FILE || path.join(__dirname, 'data', 'workspace.json'));
-app.use('/uploads', express.static(uploadsDir, { fallthrough: false, index: false, maxAge: '1h' }));
+app.use('/uploads', express.static(uploadsDir, {
+  dotfiles: 'deny', fallthrough: false, index: false, maxAge: '1h',
+  setHeaders: res => res.setHeader('X-Content-Type-Options', 'nosniff')
+}));
 
 const sessions = new Map();
 const downloadTickets = new Map();
@@ -55,7 +60,7 @@ app.get('/health', (_req, res) => {
 app.get('/api/config', (req, res) => {
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
   const protocol = forwardedProto || req.protocol;
-  const base = process.env.PUBLIC_BASE_URL || `${protocol}://${req.get('host')}`;
+  const base = configuredPublicBaseUrl || `${protocol}://${req.get('host')}`;
   const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
   if (process.env.TURN_URL) {
     iceServers.push({
@@ -93,14 +98,14 @@ app.post('/api/workspace/sync', (req, res) => {
   }
 });
 
-function saveFieldPhotoMetadata(project, areaName, captureId, url, size) {
+function saveFieldPhotoMetadata(project, areaName, captureId, url, publicUrl, size) {
   try {
     const workspace = readWorkspace(workspaceFile);
     const area = workspace.areasByProject[project]?.find(item => item.name === areaName);
     if (!area) return;
     area.photos ||= [];
     if (area.photos.some(photo => photo.id === captureId || photo.url === url)) return;
-    area.photos.push({ id: captureId, url, size, createdAt: new Date().toISOString() });
+    area.photos.push({ id: captureId, url, ...(publicUrl ? { publicUrl } : {}), size, createdAt: new Date().toISOString() });
     writeWorkspace(workspaceFile, workspace);
   } catch (error) { console.error('Field photo metadata failed:', error); }
 }
@@ -179,15 +184,19 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   const captureId = safeCaptureId(req.get('x-capture-id'));
   if (!captureId) return res.status(400).json({ message: 'Identificatore scatto non valido.' });
   const persisted = authorization.role === 'camera' ? findFieldPhotoMetadata(project, area, captureId) : null;
-  if (persisted) return res.status(200).json({ url: persisted.url });
+  if (persisted) return res.status(200).json({
+    url: persisted.url,
+    publicUrl: persisted.publicUrl || publicPhotoUrl(configuredPublicBaseUrl, persisted.url) || null
+  });
   const storageSession = { ...session, area: authorization.area.name, location: authorization.area.location };
   const captureKey = `${session.project}\0${area}\0${captureId}`;
   const previous = session.savedCaptures.get(captureKey);
   if (previous) return res.status(200).json(previous);
   try {
-    const saved = savePhotoFile(uploadsDir, storageSession, req.get('content-type'), req.body);
+    const stored = savePhotoFile(uploadsDir, storageSession, req.get('content-type'), req.body);
+    const saved = { ...stored, publicUrl: publicPhotoUrl(configuredPublicBaseUrl, stored.url) || null };
     session.savedCaptures.set(captureKey, saved);
-    if (authorization.role === 'camera') saveFieldPhotoMetadata(session.project, area, captureId, saved.url, req.body.length);
+    if (authorization.role === 'camera') saveFieldPhotoMetadata(session.project, area, captureId, saved.url, saved.publicUrl, req.body.length);
     res.status(201).json(saved);
   }
   catch (error) { console.error('Photo storage failed:', error); res.status(500).json({ message: 'Salvataggio foto non riuscito.' }); }

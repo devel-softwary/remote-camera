@@ -29,6 +29,7 @@ export function fieldPhotoItems(workspace, project, areaName, queuedPhotos = [])
     id: photo.id || photo.url,
     source: 'server',
     url: photo.url,
+    publicUrl: photo.publicUrl || '',
     createdAt: photo.createdAt || '',
     size: photo.size || 0
   }));

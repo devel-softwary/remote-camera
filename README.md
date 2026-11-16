@@ -61,6 +61,8 @@ Imposta anche:
 PUBLIC_BASE_URL=https://camera.example.com
 ```
 
+`PUBLIC_BASE_URL` è necessario per produrre URL assoluti delle foto da inserire in Excel. Il dominio deve essere raggiungibile dall'esterno e il reverse proxy deve inoltrare anche `/uploads/`.
+
 ## Docker
 
 ```bash
