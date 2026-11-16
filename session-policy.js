@@ -32,8 +32,10 @@ export function matchesSessionBinding(session, project, area) {
 
 export function authorizePhotoUpload(session, request, tokensEqual, now = Date.now()) {
   if (!session || now >= session.expiresAt || request.project !== session.project) return null;
-  if (tokensEqual(session.controllerToken, request.controllerToken) && session.area === request.area) {
-    return { role: 'controller', area: { name: session.area, location: session.location } };
+  if (tokensEqual(session.controllerToken, request.controllerToken)) {
+    const area = session.allowedAreas.find(item => item.name === request.area);
+    if (area) return { role: 'controller', area };
+    if (session.area === request.area) return { role: 'controller', area: { name: session.area, location: session.location } };
   }
   if (!session.localMode || !tokensEqual(session.cameraToken, request.cameraToken)) return null;
   const area = session.allowedAreas.find(item => item.name === request.area);

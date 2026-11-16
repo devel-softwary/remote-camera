@@ -50,3 +50,11 @@ export function queuedPhotoSummary(records) {
     bytes: records.reduce((total, record) => total + (Number(record?.size) || Number(record?.blob?.size) || 0), 0)
   };
 }
+
+export function remotePhotoQueueMessage(record) {
+  if (!record?.id || !record.project || !record.area || !(record.blob instanceof Blob)) throw new Error('Foto remota non valida.');
+  return {
+    type: 'photo-queued', requestId: record.id, project: record.project, area: record.area,
+    createdAt: record.createdAt, width: record.width, height: record.height, size: record.size
+  };
+}

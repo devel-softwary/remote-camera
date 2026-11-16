@@ -180,7 +180,7 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
   if (!captureId) return res.status(400).json({ message: 'Identificatore scatto non valido.' });
   const persisted = authorization.role === 'camera' ? findFieldPhotoMetadata(project, area, captureId) : null;
   if (persisted) return res.status(200).json({ url: persisted.url });
-  const storageSession = authorization.role === 'camera' ? { ...session, area: authorization.area.name, location: authorization.area.location } : session;
+  const storageSession = { ...session, area: authorization.area.name, location: authorization.area.location };
   const captureKey = `${session.project}\0${area}\0${captureId}`;
   const previous = session.savedCaptures.get(captureKey);
   if (previous) return res.status(200).json(previous);
@@ -379,12 +379,14 @@ wss.on('connection', (ws) => {
       if (session.localMode && !allowedArea) return safeSend(ws, { type: 'command-error', message: 'Punto foto non autorizzato.' });
       const storageBinding = allowedArea || createSessionStorageBinding(session.workProfile, msg.location);
       if (!storageBinding) return safeSend(ws, { type: 'command-error', message: 'Traliccio, faccia e nodo Maradona non validi.' });
+      if (!allowedArea && ws.role === CENTRAL_ROLE) session.allowedAreas.push({ name: area, location: storageBinding.location });
       session.area = area;
       session.location = storageBinding.location;
       session.activeArea = area;
       sendSessionStatus(session);
     } else if (msg.type === 'photo-saved' && ws.role === CENTRAL_ROLE) {
-      eachController(session, { type: 'photo-saved', area: session.activeArea, photo: msg.photo || null });
+      const savedArea = safeFolderName(msg.area) || session.activeArea;
+      eachController(session, { type: 'photo-saved', area: savedArea, photo: msg.photo || null });
     } else if (msg.type === 'controller-command' && ws.role === MOBILE_ROLE) {
       if (!mobileCommandTypes.has(msg.command?.type) || !session.camera) return safeSend(ws, { type: 'command-error', message: 'Comando non disponibile.' });
       if (msg.command.type === 'capture' && !session.activeArea) return safeSend(ws, { type: 'command-error', message: 'Il controller centrale deve selezionare un’area.' });

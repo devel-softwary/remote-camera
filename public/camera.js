@@ -3,7 +3,7 @@ import { addRemoteIceCandidate, flushRemoteIceCandidates, webRtcFailureMessage }
 import { capturePhoto, captureVideoFrame } from './photo-capture.js';
 import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
-import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
+import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto, remotePhotoQueueMessage } from './photo-upload-queue.js';
 import { createAsyncTaskQueue } from './async-task-queue.js';
 import { createFieldPoint, createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
 
@@ -102,6 +102,11 @@ let localSessionBinding;
 let galleryRenderSequence = 0;
 let galleryObjectUrls = [];
 let viewerObjectUrl = '';
+let remoteProject = '';
+let remoteActiveArea = '';
+let remoteTransferBusy = false;
+let remoteTransferTimer;
+const remoteAckWaiters = new Map();
 let localUploadQueueState = { pending: 0, running: 0, total: 0 };
 const localUploadPromises = new Map();
 const localUploadQueue = createAsyncTaskQueue(({ record, context }) => uploadLocalPhoto(record, context), { onChange: state => {
@@ -308,11 +313,17 @@ function createPeer() {
     setStatus(statusEl, 'Controller collegato', 'ok');
     publishCameraInfo();
     sendData({ type: 'camera-ready' });
+    void drainRemotePhotos();
   };
-  dc.onclose = () => setStatus(statusEl, 'Canale controlli chiuso', 'warn');
+  dc.onclose = () => {
+    setStatus(statusEl, 'Canale controlli chiuso', 'warn');
+    for (const requestId of [...remoteAckWaiters.keys()]) settleRemoteAck(requestId, new Error('Controller disconnesso.'));
+  };
   dc.onmessage = async e => {
     if (typeof e.data !== 'string') return;
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === 'photo-saved-ack') { settleRemoteAck(msg.requestId); return; }
+    if (msg.type === 'photo-save-error') { settleRemoteAck(msg.requestId, new Error(msg.message || 'Salvataggio non riuscito.')); return; }
     try { await handleCommand(msg); }
     catch (err) { sendData({ type: 'command-error', command: msg.type, requestId: msg.requestId, message: err.message }); }
   };
@@ -402,39 +413,95 @@ async function focusAtPoint(x, y) {
   await applyAdvanced({ pointsOfInterest: [point], focusMode });
 }
 
-async function waitForBuffer() {
-  if (dc.bufferedAmount < 1024 * 1024) return;
+async function waitForBuffer(channel = dc) {
+  if (channel.bufferedAmount < 1024 * 1024) return;
   await new Promise(resolve => {
     const timeout = setTimeout(resolve, 5000);
-    const handler = () => { clearTimeout(timeout); dc.removeEventListener('bufferedamountlow', handler); resolve(); };
-    dc.addEventListener('bufferedamountlow', handler, { once: true });
+    const handler = () => { clearTimeout(timeout); channel.removeEventListener('bufferedamountlow', handler); resolve(); };
+    channel.addEventListener('bufferedamountlow', handler, { once: true });
   });
 }
 
-async function sendPhoto(requestId) {
+async function sendPhoto(requestId, captureContext = {}) {
   if (cameraBusy) throw new Error('Cambio fotocamera in corso. Riprova tra poco.');
   if (photoBusy) throw new Error('Scatto già in corso');
+  const captureProject = captureContext.project || remoteProject;
+  const captureArea = captureContext.area || remoteActiveArea;
+  if (!captureProject || !captureArea) throw new Error('Progetto o punto foto non disponibile.');
   photoBusy = true;
   try {
     const frame = captureVideoFrame(video, currentTrack);
     sendData({ type: 'photo-captured', requestId, createdAt: frame.createdAt });
     sendMobileData({ type: 'photo-captured', requestId, createdAt: frame.createdAt });
-    infoEl.textContent = 'Foto scattata. Preparazione invio…';
+    infoEl.textContent = 'Foto scattata. Salvataggio locale…';
     const { blob } = await capturePhoto(frame, currentTrack, flashMode ? { fillLightMode: flashMode } : {}, window.ImageCapture);
-    const buffer = await blob.arrayBuffer();
-    const chunkSize = 64 * 1024;
-    const chunks = Math.ceil(buffer.byteLength / chunkSize);
-    sendData({
-      type: 'photo-start', requestId, mime: blob.type || 'image/jpeg', size: buffer.byteLength,
-      chunks, createdAt: frame.createdAt, width: frame.width, height: frame.height
+    const record = createQueuedPhoto({
+      id: requestId, room, project: captureProject, area: captureArea,
+      blob, createdAt: frame.createdAt, width: frame.width, height: frame.height
     });
-    for (let offset = 0; offset < buffer.byteLength; offset += chunkSize) {
-      await waitForBuffer();
-      dc.send(buffer.slice(offset, Math.min(offset + chunkSize, buffer.byteLength)));
-    }
-    sendData({ type: 'photo-end', requestId });
-    infoEl.textContent = `Foto inviata • ${formatBytes(buffer.byteLength)}`;
+    await queuePhoto(record);
+    sendData(remotePhotoQueueMessage(record));
+    infoEl.textContent = `Foto accodata • ${formatBytes(blob.size)}. Puoi scattare ancora.`;
+    void drainRemotePhotos();
   } finally { photoBusy = false; }
+}
+
+function waitForRemoteAck(requestId) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => settleRemoteAck(requestId, new Error('Conferma salvataggio scaduta.')), 90_000);
+    remoteAckWaiters.set(requestId, { resolve, reject, timeout });
+  });
+}
+
+function settleRemoteAck(requestId, error = null) {
+  const waiter = remoteAckWaiters.get(requestId);
+  if (!waiter) return;
+  remoteAckWaiters.delete(requestId);
+  clearTimeout(waiter.timeout);
+  if (error) waiter.reject(error); else waiter.resolve();
+}
+
+async function transferRemotePhoto(record) {
+  const channel = dc;
+  if (!channel || channel.readyState !== 'open') throw new Error('Controller non collegato.');
+  const buffer = await record.blob.arrayBuffer();
+  const chunkSize = 64 * 1024;
+  channel.send(JSON.stringify(remotePhotoQueueMessage(record)));
+  channel.send(JSON.stringify({
+    type: 'photo-start', requestId: record.id, mime: record.blob.type || 'image/jpeg', size: buffer.byteLength,
+    chunks: Math.ceil(buffer.byteLength / chunkSize), createdAt: record.createdAt, width: record.width, height: record.height
+  }));
+  for (let offset = 0; offset < buffer.byteLength; offset += chunkSize) {
+    if (channel.readyState !== 'open') throw new Error('Connessione al controller interrotta.');
+    await waitForBuffer(channel);
+    channel.send(buffer.slice(offset, Math.min(offset + chunkSize, buffer.byteLength)));
+  }
+  const acknowledgement = waitForRemoteAck(record.id);
+  channel.send(JSON.stringify({ type: 'photo-end', requestId: record.id }));
+  await acknowledgement;
+  await deleteQueuedPhoto(record.id);
+}
+
+async function drainRemotePhotos() {
+  if (localMode || remoteTransferBusy || dc?.readyState !== 'open') return;
+  remoteTransferBusy = true;
+  let retry = false;
+  try {
+    const records = (await listQueuedPhotos(room)).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    for (const record of records) {
+      infoEl.textContent = `Invio foto accodata • ${formatBytes(record.size)}…`;
+      await transferRemotePhoto(record);
+      infoEl.textContent = 'Foto salvata sul server. Coda in aggiornamento…';
+    }
+  } catch (error) {
+    retry = true;
+    infoEl.textContent = `Foto conservate sul telefono: ${error.message}`;
+  } finally {
+    remoteTransferBusy = false;
+    clearTimeout(remoteTransferTimer);
+    const remaining = await listQueuedPhotos(room).catch(() => []);
+    if (remaining.length) remoteTransferTimer = setTimeout(() => void drainRemotePhotos(), retry ? 5000 : 0);
+  }
 }
 
 async function refreshLocalQueue() {
@@ -790,7 +857,7 @@ async function createLocalFieldSession() {
 
 async function handleCommand(msg) {
   switch (msg.type) {
-    case 'capture': return sendPhoto(msg.requestId);
+    case 'capture': return sendPhoto(msg.requestId, { project: msg.project, area: msg.area });
     case 'set-zoom': return applyAdvanced({ zoom: Number(msg.value) });
     case 'set-torch': return applyAdvanced({ torch: Boolean(msg.value) });
     case 'autofocus': return autofocus();
@@ -860,6 +927,8 @@ function connectWs() {
       else if (msg.type === 'session-status') {
         renderLocalSession(msg);
         if (!localMode) {
+          remoteProject = msg.project || remoteProject;
+          remoteActiveArea = msg.activeArea || remoteActiveArea;
           if (msg.controller && !centralOfferSent) { await sendOffer('controller-central'); centralOfferSent = true; }
           if (!msg.controller) centralOfferSent = false;
           if (msg.mobileController && !mobilePc) { createMobilePeer(); await sendOffer('controller-mobile'); }
@@ -916,8 +985,8 @@ async function start() {
   connectWs();
   permissionCard.classList.add('hidden');
   if (localMode) localProjectSelect.disabled = true;
+  void navigator.storage?.persist?.();
   if (localMode) {
-    void navigator.storage?.persist?.();
     await refreshLocalQueue();
   }
   infoEl.textContent = localMode ? 'Camera avviata. Connessione al lavoro…' : 'Camera avviata. In attesa del controller.';

@@ -84,6 +84,7 @@ assert.deepEqual(createAllowedSessionAreas('DAM', [
 const uploadSession = { project: 'DAM', area: 'Nodo 1', activeArea: 'Nodo 1', location: null, controllerToken: 'central', cameraToken: 'camera', localMode: true, expiresAt: 2000, allowedAreas: [{ name: 'Nodo 1', location: null }, { name: 'Nodo 2', location: null }] };
 const equalTokens = (actual, supplied) => actual === supplied;
 assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 1', controllerToken: 'central' }, equalTokens, 1999).role, 'controller');
+assert.equal(authorizePhotoUpload(uploadSession, { project: 'DAM', area: 'Nodo 2', controllerToken: 'central' }, equalTokens, 1999).area.name, 'Nodo 2');
 assert.equal(authorizePhotoDelete(uploadSession, { project: 'DAM', area: 'Nodo 2', controllerToken: 'central' }, equalTokens, 1999).name, 'Nodo 2');
 assert.equal(authorizePhotoDelete(uploadSession, { project: 'DAM', area: 'Nodo 2', controllerToken: 'wrong' }, equalTokens, 1999), null);
 assert.equal(authorizePhotoDelete(uploadSession, { project: 'Altro', area: 'Nodo 2', controllerToken: 'central' }, equalTokens, 1999), null);

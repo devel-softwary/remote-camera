@@ -26,7 +26,8 @@ await assert.rejects(queue.enqueue('broken'), /upload failed/);
 assert.equal(await queue.enqueue('after-error'), 'after-error');
 
 const controllerSource = await readFile(new URL('../public/controller.js', import.meta.url), 'utf8');
-assert.match(controllerSource, /clearCaptureRequest\(\);\s*uploadingAreaCounts\.set[\s\S]*photoServerQueue\.enqueue/);
+assert.match(controllerSource, /registerQueuedCapture[\s\S]*clearCaptureRequest\(\)[\s\S]*photoServerQueue\.enqueue/);
 assert.doesNotMatch(controllerSource, /isCurrentCapture\(captureRequestId, meta\.requestId\)/);
+assert.match(controllerSource, /type: 'photo-saved-ack'/);
 
 console.log('Async photo upload queue regression passed');

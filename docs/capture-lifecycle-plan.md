@@ -10,3 +10,5 @@
 - Risposte riferite a uno scatto precedente non alterano lo stato dello scatto corrente.
 - In modalità telefono singolo la foto viene prima salvata in IndexedDB, poi il pulsante di scatto viene riattivato.
 - Gli upload dal telefono sono seriali e proseguono in background; in caso di errore la copia locale resta disponibile per la sincronizzazione manuale.
+- Anche nella sessione remota ogni full-resolution viene salvata nella coda IndexedDB del telefono prima di riattivare lo scatto.
+- Il trasferimento telefono-laptop è seriale e la copia locale viene rimossa solo dopo la conferma del salvataggio server.

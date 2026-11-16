@@ -21,12 +21,12 @@ const focusDistanceValue = document.querySelector('#focusDistanceValue');
 const flashMode = document.querySelector('#flashMode');
 const capabilitiesEl = document.querySelector('#capabilities');
 let cameraInfo = null;
-let config, ws, pc, dc, torchOn = false, sequence = 0;
+let config, ws, pc, dc, torchOn = false;
 
 function signal(message) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message)); }
 function command(type, payload = {}) {
   if (ws?.readyState !== WebSocket.OPEN) return;
-  const requestId = `${Date.now()}-${++sequence}`;
+  const requestId = crypto.randomUUID();
   signal({ type: 'controller-command', command: { type, requestId, ...payload } });
   infoEl.textContent = type === 'capture' ? 'Scatto in corso…' : 'Comando inviato…';
   if (type === 'capture') captureBtn.disabled = true;
@@ -81,7 +81,7 @@ async function connect() {
     if (message.type === 'joined') setStatus(statusEl, `Sessione ${message.room}`, 'ok');
     else if (message.type === 'session-status') areaEl.textContent = message.activeArea ? `Punto foto attivo: ${message.activeArea}` : 'Il laptop deve selezionare un punto foto.';
     else if (message.type === 'photo-saved') infoEl.textContent = message.area ? `Foto archiviata in “${message.area}”.` : 'Foto archiviata.';
-    else if (message.type === 'command-result') { infoEl.textContent = message.ok ? (message.command === 'capture' ? 'Foto inviata al controller centrale.' : 'Comando completato.') : `Errore: ${message.message || 'comando non riuscito'}`; captureBtn.disabled = false; }
+    else if (message.type === 'command-result') { infoEl.textContent = message.ok ? (message.command === 'capture' ? 'Foto accodata. Puoi scattare ancora.' : 'Comando completato.') : `Errore: ${message.message || 'comando non riuscito'}`; captureBtn.disabled = false; }
     else if (message.type === 'webrtc-offer') { await pc.setRemoteDescription(message.sdp); const answer = await pc.createAnswer(); await pc.setLocalDescription(answer); signal({ type: 'webrtc-answer', sdp: pc.localDescription }); }
     else if (message.type === 'ice-candidate' && message.candidate) await pc.addIceCandidate(message.candidate);
   };
