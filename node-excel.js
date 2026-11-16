@@ -1,12 +1,67 @@
+import fs from 'node:fs';
+import { inflateRawSync } from 'node:zlib';
 import archiver from 'archiver';
 import { MARADONA_WORK_PROFILE, normalizeMaradonaLocation, normalizeWorkProfile } from './public/work-profile.js';
+
+const DEFAULT_TEMPLATE = new URL('./docs/scheda-rilievo-nodo-bullonato-traliccio-acciaio.xlsx', import.meta.url);
+const MAX_TEMPLATE_ENTRIES = 100;
+const MAX_TEMPLATE_ENTRY_SIZE = 10 * 1024 * 1024;
+const PHOTO_SLOTS = [
+  { link: 'B16', name: 'B28' }, { link: 'G16', name: 'G28' }, { link: 'L16', name: 'L28' },
+  { link: 'B30', name: 'B42' }, { link: 'G30', name: 'G42' }, { link: 'L30', name: 'L42' }
+];
 
 function xml(value) {
   return String(value ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]);
 }
 
-function inlineCell(reference, value, style = 0) {
-  return `<c r="${reference}" t="inlineStr"${style ? ` s="${style}"` : ''}><is><t>${xml(value)}</t></is></c>`;
+function endOfCentralDirectory(buffer) {
+  for (let offset = buffer.length - 22; offset >= Math.max(0, buffer.length - 65_557); offset -= 1) {
+    if (buffer.readUInt32LE(offset) === 0x06054b50) return offset;
+  }
+  return -1;
+}
+
+export function readXlsxEntries(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 22) throw new Error('Modello Excel non valido.');
+  const end = endOfCentralDirectory(buffer);
+  if (end < 0) throw new Error('Indice del modello Excel non valido.');
+  const count = buffer.readUInt16LE(end + 10);
+  let offset = buffer.readUInt32LE(end + 16);
+  if (count > MAX_TEMPLATE_ENTRIES) throw new Error('Il modello Excel contiene troppi file.');
+  const entries = [];
+  for (let index = 0; index < count; index += 1) {
+    if (buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error('Voce del modello Excel non valida.');
+    const flags = buffer.readUInt16LE(offset + 8);
+    const method = buffer.readUInt16LE(offset + 10);
+    const compressedSize = buffer.readUInt32LE(offset + 20);
+    const size = buffer.readUInt32LE(offset + 24);
+    const nameLength = buffer.readUInt16LE(offset + 28);
+    const extraLength = buffer.readUInt16LE(offset + 30);
+    const commentLength = buffer.readUInt16LE(offset + 32);
+    const localOffset = buffer.readUInt32LE(offset + 42);
+    const name = buffer.subarray(offset + 46, offset + 46 + nameLength).toString('utf8');
+    if ((flags & 1) || ![0, 8].includes(method) || size > MAX_TEMPLATE_ENTRY_SIZE || !name || name.startsWith('/') || name.includes('..')) throw new Error('Contenuto del modello Excel non sicuro.');
+    if (buffer.readUInt32LE(localOffset) !== 0x04034b50) throw new Error('File del modello Excel non valido.');
+    const localNameLength = buffer.readUInt16LE(localOffset + 26);
+    const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+    const dataOffset = localOffset + 30 + localNameLength + localExtraLength;
+    const compressed = buffer.subarray(dataOffset, dataOffset + compressedSize);
+    const data = method === 8 ? inflateRawSync(compressed) : Buffer.from(compressed);
+    if (data.length !== size) throw new Error('File del modello Excel incompleto.');
+    entries.push({ name, data });
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+function replaceCell(sheet, reference, value) {
+  const pattern = new RegExp(`<c\\b([^>]*\\br="${reference}"[^>]*)(?:\\s*/>|>[\\s\\S]*?<\\/c>)`);
+  const match = sheet.match(pattern);
+  if (!match) throw new Error(`Cella ${reference} assente nel modello Excel.`);
+  const style = match[1].match(/\bs="(\d+)"/)?.[1];
+  const cell = `<c r="${reference}"${style ? ` s="${style}"` : ''} t="inlineStr"><is><t>${xml(value)}</t></is></c>`;
+  return sheet.replace(pattern, cell);
 }
 
 export function nodeExcelFilename(location) {
@@ -22,35 +77,51 @@ export function maradonaNodeArea(session, areaName) {
   return area && location ? { name: area.name, location } : null;
 }
 
-export function nodeExcelWorksheetXml({ jobCode = 'XXXX', location, photos = [] }) {
+export function fillNodeTemplateWorksheet(template, { jobCode = 'XXXX', location, photos = [] }) {
   const value = normalizeMaradonaLocation(location);
   if (!value) throw new Error('Nodo Maradona non valido.');
-  const rows = [
-    `<row r="1">${inlineCell('A1', 'Commessa', 1)}${inlineCell('B1', jobCode)}</row>`,
-    `<row r="2">${inlineCell('A2', 'N° Traliccio', 1)}${inlineCell('B2', value.tower)}</row>`,
-    `<row r="3">${inlineCell('A3', 'ID NODO', 1)}${inlineCell('B3', `${value.face} ${value.node.slice(1)}`)}</row>`
-  ];
-  photos.forEach((photo, index) => {
-    const row = index + 5;
-    rows.push(`<row r="${row}">${inlineCell(`A${row}`, `FOTO ${index + 1}`, 1)}${inlineCell(`B${row}`, photo.filename, 2)}</row>`);
+  let sheet = String(template || '');
+  sheet = replaceCell(sheet, 'C5', jobCode);
+  sheet = replaceCell(sheet, 'H5', value.tower);
+  sheet = replaceCell(sheet, 'F6', `${value.face} ${value.node.slice(1)}`);
+  sheet = sheet.replace('sqref="F6"', 'sqref="K6"');
+  const hyperlinks = [];
+  photos.slice(0, PHOTO_SLOTS.length).forEach((photo, index) => {
+    const slot = PHOTO_SLOTS[index];
+    sheet = replaceCell(sheet, slot.link, `Apri FOTO ${index + 1}`);
+    sheet = replaceCell(sheet, slot.name, photo.filename);
+    hyperlinks.push(`<hyperlink ref="${slot.link}" r:id="rId${index + 1}"/><hyperlink ref="${slot.name}" r:id="rId${index + 1}"/>`);
   });
-  const hyperlinks = photos.length
-    ? `<hyperlinks>${photos.map((_, index) => `<hyperlink ref="B${index + 5}" r:id="rId${index + 1}"/>`).join('')}</hyperlinks>`
-    : '';
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="52" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData>${hyperlinks}</worksheet>`;
+  const extra = photos.slice(PHOTO_SLOTS.length);
+  if (extra.length) {
+    const rows = [`<row r="66"><c r="B66" s="7" t="inlineStr"><is><t>FOTO AGGIUNTIVE</t></is></c></row>`];
+    extra.forEach((photo, index) => {
+      const row = 67 + index;
+      rows.push(`<row r="${row}"><c r="B${row}" s="2" t="inlineStr"><is><t>FOTO ${index + 7}</t></is></c><c r="C${row}" s="11" t="inlineStr"><is><t>${xml(photo.filename)}</t></is></c></row>`);
+      hyperlinks.push(`<hyperlink ref="C${row}" r:id="rId${index + 7}"/>`);
+    });
+    const lastRow = 66 + extra.length;
+    sheet = sheet.replace('</sheetData>', `${rows.join('')}</sheetData>`).replace(/<dimension ref="A1:R\d+"\/>/, `<dimension ref="A1:R${lastRow}"/>`);
+  }
+  if (hyperlinks.length) sheet = sheet.replace('</dataValidations>', `</dataValidations><hyperlinks>${hyperlinks.join('')}</hyperlinks>`);
+  return sheet;
 }
 
 export function nodeExcelRelationshipsXml(photos = []) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${photos.map((photo, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${xml(photo.publicUrl)}" TargetMode="External"/>`).join('')}</Relationships>`;
 }
 
-const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
-const rootRelationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
-const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Dettaglio nodo" sheetId="1" r:id="rId1"/></sheets></workbook>`;
-const workbookRelationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><u/><color rgb="FF0563C1"/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-
-export function createNodeExcel({ jobCode, location, photos }) {
+export function createNodeExcel({ jobCode, location, photos, templatePath = DEFAULT_TEMPLATE }) {
+  const entries = readXlsxEntries(fs.readFileSync(templatePath));
+  const replacements = new Map();
+  const sheetEntry = entries.find(entry => entry.name === 'xl/worksheets/sheet1.xml');
+  if (!sheetEntry) throw new Error('Foglio principale assente nel modello Excel.');
+  replacements.set(sheetEntry.name, Buffer.from(fillNodeTemplateWorksheet(sheetEntry.data.toString('utf8'), { jobCode, location, photos })));
+  replacements.set('xl/worksheets/_rels/sheet1.xml.rels', Buffer.from(nodeExcelRelationshipsXml(photos)));
+  if (photos.length > PHOTO_SLOTS.length) {
+    const workbookEntry = entries.find(entry => entry.name === 'xl/workbook.xml');
+    if (workbookEntry) replacements.set(workbookEntry.name, Buffer.from(workbookEntry.data.toString('utf8').replace(/\$R\$65/, `$R$${66 + photos.length - PHOTO_SLOTS.length}`)));
+  }
   return new Promise((resolve, reject) => {
     const chunks = [];
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -58,13 +129,8 @@ export function createNodeExcel({ jobCode, location, photos }) {
     archive.on('warning', reject);
     archive.on('error', reject);
     archive.on('end', () => resolve(Buffer.concat(chunks)));
-    archive.append(contentTypes, { name: '[Content_Types].xml' });
-    archive.append(rootRelationships, { name: '_rels/.rels' });
-    archive.append(workbook, { name: 'xl/workbook.xml' });
-    archive.append(workbookRelationships, { name: 'xl/_rels/workbook.xml.rels' });
-    archive.append(styles, { name: 'xl/styles.xml' });
-    archive.append(nodeExcelWorksheetXml({ jobCode, location, photos }), { name: 'xl/worksheets/sheet1.xml' });
-    archive.append(nodeExcelRelationshipsXml(photos), { name: 'xl/worksheets/_rels/sheet1.xml.rels' });
+    for (const entry of entries) archive.append(replacements.get(entry.name) || entry.data, { name: entry.name });
+    if (!entries.some(entry => entry.name === 'xl/worksheets/_rels/sheet1.xml.rels')) archive.append(replacements.get('xl/worksheets/_rels/sheet1.xml.rels'), { name: 'xl/worksheets/_rels/sheet1.xml.rels' });
     void archive.finalize();
   });
 }

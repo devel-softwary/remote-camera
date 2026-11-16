@@ -19,7 +19,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
 - coda foto sul telefono con upload manuale o immediato
 - download ZIP dell'intero progetto dal controller, con struttura per area
-- download Excel per ogni nodo Maradona, con dati nodo e link pubblici alle foto
+- download Excel per ogni nodo Maradona basato sul modello di rilievo, con dati nodo e link pubblici alle foto
 - STUN incluso; TURN configurabile via variabili d'ambiente
 
 ## Avvio rapido
