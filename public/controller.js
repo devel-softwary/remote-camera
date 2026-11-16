@@ -266,7 +266,6 @@ function renderAreas() {
   const projectSelected = isProjectSelected(project);
   const areas = projectSelected ? (areasByProject[project] ||= []) : [];
   const points = photoPointsByProject[project] || [];
-  const isMaradona = normalizeWorkProfile(projectProfilesByProject[project]).type === MARADONA_WORK_PROFILE;
   if (linkPhotoPointsToAreas(points, areas)) saveWorkspace();
   const pointAreas = points.map(point => areas.find(area => area.id === point.areaId)).filter(Boolean);
   const selected = areaSelect.value;
@@ -287,11 +286,6 @@ function renderAreas() {
       button.append(name, status);
       button.addEventListener('click', () => { areaSelect.value = area.id; selectedPhotoPointId = point.id; renderAreas(); publishActiveArea(); });
       const actions = document.createElement('div'); actions.className = 'photo-point-list-actions';
-      if (isMaradona && area?.location) {
-        const excel = createPointActionButton(`Scarica Excel ${point.label}`, 'point-action-excel', ['M6 2h9l5 5v15H6z', 'M14 2v6h6', 'M13 11v6', 'M10 14l3 3 3-3']);
-        excel.replaceChildren(); excel.textContent = 'XLSX';
-        excel.addEventListener('click', () => void downloadNodeExcel(area, excel)); actions.append(excel);
-      }
       const edit = createPointActionButton(`Rinomina ${point.label}`, 'point-action-edit', ['M4 20h4L19 9l-4-4L4 16v4', 'M13.5 6.5l4 4']); edit.addEventListener('click', () => renameListedPhotoPoint(point, areas));
       const remove = createPointActionButton(`Elimina ${point.label}`, 'point-action-delete', ['M3 6h18', 'M8 6V4h8v2', 'M6 6l1 14h10l1-14', 'M10 10v6', 'M14 10v6']); remove.addEventListener('click', () => void deleteListedPhotoPoint(point, areas));
       actions.append(edit, remove); item.append(button, actions); photoPointList.append(item);
@@ -840,14 +834,25 @@ function publishActiveArea() {
 function renderGallery() {
   const pointAreaIds = new Set(projectPoints().map(point => point.areaId));
   const areas = (areasByProject[projectSelect.value] || []).filter(area => pointAreaIds.has(area.id));
+  const isMaradona = normalizeWorkProfile(projectProfilesByProject[projectSelect.value]).type === MARADONA_WORK_PROFILE;
   photoLazyLoader.clear();
   gallery.replaceChildren();
-  if (!areas.some(area => area.photos?.length || queuedGalleryPhotos(queuedCaptures, projectSelect.value, area.id).length)) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
+  if (!areas.length || (!isMaradona && !areas.some(area => area.photos?.length || queuedGalleryPhotos(queuedCaptures, projectSelect.value, area.id).length))) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
   for (const area of areas) {
     const photos = [...queuedGalleryPhotos(queuedCaptures, projectSelect.value, area.id), ...(area.photos || [])];
-    if (!photos.length) continue;
+    if (!photos.length && !isMaradona) continue;
     const group = document.createElement('section'); group.className = 'photo-area';
+    const heading = document.createElement('div'); heading.className = 'photo-area-heading';
     const title = document.createElement('h3'); title.textContent = `${area.name}${area.status === 'closed' ? ' · chiuso' : ''}`;
+    heading.append(title);
+    if (isMaradona && area.location) {
+      const excel = document.createElement('button'); excel.type = 'button'; excel.className = 'secondary node-excel-download'; excel.textContent = 'Scarica XLSX'; excel.setAttribute('aria-label', `Scarica Excel ${area.name}`);
+      excel.addEventListener('click', () => void downloadNodeExcel(area, excel)); heading.append(excel);
+    }
+    if (!photos.length) {
+      const empty = document.createElement('p'); empty.className = 'small'; empty.textContent = 'Nessuna foto per questo nodo.';
+      group.append(heading, empty); gallery.append(group); continue;
+    }
     const items = document.createElement('div'); items.className = 'gallery';
     for (const photo of photos) {
       const figure = document.createElement('figure');
@@ -883,7 +888,7 @@ function renderGallery() {
       remove.append(removeIcon); remove.addEventListener('click', () => void deleteGalleryPhoto(photo, area, remove));
       actions.append(view, link, remove); figure.append(imageFrame, filename, meta, actions); items.append(figure);
     }
-    group.append(title, items); gallery.append(group);
+    group.append(heading, items); gallery.append(group);
   }
 }
 

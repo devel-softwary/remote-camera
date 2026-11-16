@@ -69,7 +69,9 @@ button.capture { min-height:54px; font-size:1.05rem; }
 .gallery-meta { color:#b8c0d9; font-size:.8rem; margin-top:3px; }
 .gallery a { display:inline-block; margin-top:3px; }
 .photo-area { grid-column:1 / -1; }
-.photo-area h3 { margin:18px 0 8px; font-size:.95rem; color:#d9e2ff; }
+.photo-area-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:18px 0 8px; }
+.photo-area h3 { margin:0; font-size:.95rem; color:#d9e2ff; }
+.node-excel-download { min-height:36px; padding:0 10px; color:#3ed598; font-size:.78rem; white-space:nowrap; }
 .disabled-control { opacity:.55; }
 .diagnostics { white-space:pre-line; }
 .touch-focus { cursor:crosshair; }
@@ -152,7 +154,6 @@ body.local-mode .local-capture-overlay:active:not(:disabled) { transform:transla
 .photo-point-list .point-action { width:34px; min-height:34px; border-radius:10px; }
 .point-action svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 .point-action-delete { color:#ff9eaa; }
-.photo-point-list .point-action-excel { width:auto; min-width:48px; padding:0 6px; color:#3ed598; font-size:.68rem; }
 .session-section button { width:100%; }
 .section-heading { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:12px; }
 .section-heading .small { margin:0; text-align:right; }

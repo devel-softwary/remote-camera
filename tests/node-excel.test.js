@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createNodeExcel, maradonaNodeArea, nodeExcelFilename, nodeExcelRelationshipsXml, nodeExcelWorksheetXml } from '../node-excel.js';
 
 const location = { tower: 1, face: 'a', node: 7 };
@@ -27,5 +28,11 @@ assert.match(relationships, /x=1&amp;y=2/);
 const workbook = await createNodeExcel({ jobCode: 'XXXX', location, photos });
 assert.deepEqual([...workbook.subarray(0, 2)], [0x50, 0x4b]);
 assert.ok(workbook.length > 1000);
+
+const controllerSource = await readFile(new URL('../public/controller.js', import.meta.url), 'utf8');
+const gallerySource = controllerSource.slice(controllerSource.indexOf('function renderGallery()'), controllerSource.indexOf('async function deleteGalleryPhoto'));
+assert.match(gallerySource, /photo-area-heading/);
+assert.match(gallerySource, /Scarica XLSX/);
+assert.match(gallerySource, /isMaradona && area\.location/);
 
 console.log('Maradona node Excel regression passed');
