@@ -31,18 +31,19 @@ export function photoStoragePlan(root, session, contentType) {
     const segments = [profile.workName, location.tower, location.face, location.node];
     return {
       folder: path.join(root, ...segments), segments, extension,
-      filenamePrefix: `${profile.workName}_${location.tower}_${location.face}_${location.node}`
+      filenamePrefix: `${location.tower}_${location.face}_${location.node}`,
+      legacyFilenamePrefix: `${profile.workName}_${location.tower}_${location.face}_${location.node}_fotogramma`
     };
   }
   const project = safeFolderName(session?.project);
   const area = safeFolderName(session?.area);
   if (!project || !area) return null;
-  return { folder: path.join(root, project, area), segments: [project, area], extension, filenamePrefix: '' };
+  return { folder: path.join(root, project, area), segments: [project, area], extension, filenamePrefix: '', legacyFilenamePrefix: '' };
 }
 
 export function maradonaPhotoFilename(prefix, sequence, extension) {
   if (!prefix || !Number.isInteger(sequence) || sequence < 1 || !['jpg', 'png', 'webp'].includes(extension)) return '';
-  return `${prefix}_fotogramma${String(sequence).padStart(2, '0')}.${extension}`;
+  return `${prefix}_${String(sequence).padStart(2, '0')}.${extension}`;
 }
 
 export function photoPublicUrl(segments, filename) {

@@ -87,7 +87,7 @@ DAM/
   TR01/
     A/
       N001/
-        DAM_TR01_A_N001_fotogramma01.jpg
+        TR01_A_N001_01.jpg
 ```
 
 Regole:
@@ -96,8 +96,8 @@ Regole:
 - traliccio: `TR01` … `TR28`;
 - faccia: `A`, `B`, `C`, `D`;
 - nodo: `N001` … `N100`;
-- fotogramma: `fotogramma01`, `fotogramma02`, …;
-- lavori generici: flusso attuale invariato.
+- progressivo foto: `01`, `02`, …;
+- lavori generici: nome progressivo `01.ext`, `02.ext`, ….
 
 Il server deve generare percorso, nome e progressivo. Non deve fidarsi di un percorso inviato dal client. Il progressivo deve essere assegnato senza collisioni e lo scatto deve avere un identificatore idempotente per evitare duplicati durante i retry.
 
