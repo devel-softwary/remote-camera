@@ -5,6 +5,7 @@ import { createPhotoPoint, drawingBounds, isPointerDrag, parseDxf } from './cad-
 import { HELP_STEPS } from './help-content.js';
 import { cameraSessionLink, localCameraLink } from './session-links.js';
 import { createThumbnail, deleteThumbnail, loadThumbnail, saveThumbnail, thumbnailStorageKey } from './photo-thumbnails.js';
+import { createPhotoLazyLoader } from './photo-lazy-loader.js';
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCurrentCapture } from './capture-lifecycle.js';
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
@@ -116,6 +117,7 @@ let cadPan = null;
 let suppressNextCadClick = false;
 let sessionStarting = false;
 let currentPhotoZoomRange = { min: 1, max: 1 };
+const photoLazyLoader = createPhotoLazyLoader({ loadThumbnail });
 
 function renderHelp() {
   for (const step of HELP_STEPS) {
@@ -741,6 +743,7 @@ function publishActiveArea() {
 function renderGallery() {
   const pointAreaIds = new Set(projectPoints().map(point => point.areaId));
   const areas = (areasByProject[projectSelect.value] || []).filter(area => pointAreaIds.has(area.id));
+  photoLazyLoader.clear();
   gallery.replaceChildren();
   if (!areas.some(area => area.photos?.length)) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
   for (const area of areas) {
@@ -750,8 +753,12 @@ function renderGallery() {
     const items = document.createElement('div'); items.className = 'gallery';
     for (const photo of area.photos) {
       const figure = document.createElement('figure');
-      const img = document.createElement('img'); img.src = photo.url; img.alt = `Foto ${area.name}`;
-      showStoredThumbnail(img, photo);
+      const imageFrame = document.createElement('div'); imageFrame.className = 'gallery-image-frame'; imageFrame.setAttribute('aria-busy', 'true');
+      const img = document.createElement('img'); img.alt = `Foto ${area.name}`;
+      const loader = document.createElement('span'); loader.className = 'gallery-image-loader'; loader.setAttribute('role', 'status');
+      const loaderText = document.createElement('span'); loaderText.className = 'sr-only'; loaderText.textContent = 'Caricamento foto'; loader.append(loaderText);
+      imageFrame.append(img, loader);
+      photoLazyLoader.observe(img, photo);
       const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const actions = document.createElement('div'); actions.className = 'gallery-actions';
       const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary gallery-icon-button'; view.title = `Visualizza foto ${area.name}`; view.setAttribute('aria-label', view.title);
@@ -762,20 +769,10 @@ function renderGallery() {
       const downloadIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); downloadIcon.setAttribute('viewBox', '0 0 24 24'); downloadIcon.setAttribute('aria-hidden', 'true'); downloadIcon.setAttribute('focusable', 'false');
       const downloadPath = document.createElementNS('http://www.w3.org/2000/svg', 'path'); downloadPath.setAttribute('d', 'M12 3v11m0 0 4-4m-4 4-4-4m-3 7v3h14v-3'); downloadIcon.append(downloadPath);
       link.append(downloadIcon);
-      actions.append(view, link); figure.append(img, meta, actions); items.append(figure);
+      actions.append(view, link); figure.append(imageFrame, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
   }
-}
-
-function showStoredThumbnail(img, photo) {
-  if (!photo.thumbnailKey) return;
-  loadThumbnail(photo.thumbnailKey).then(blob => {
-    if (!blob || !img.isConnected) return;
-    const url = URL.createObjectURL(blob);
-    img.onload = () => URL.revokeObjectURL(url);
-    img.src = url;
-  }).catch(() => {});
 }
 
 function setPhotoZoom(value) {
