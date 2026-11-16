@@ -98,14 +98,14 @@ app.post('/api/workspace/sync', (req, res) => {
   }
 });
 
-function saveFieldPhotoMetadata(project, areaName, captureId, url, publicUrl, size) {
+function saveFieldPhotoMetadata(project, areaName, captureId, filename, url, publicUrl, size) {
   try {
     const workspace = readWorkspace(workspaceFile);
     const area = workspace.areasByProject[project]?.find(item => item.name === areaName);
     if (!area) return;
     area.photos ||= [];
     if (area.photos.some(photo => photo.id === captureId || photo.url === url)) return;
-    area.photos.push({ id: captureId, url, ...(publicUrl ? { publicUrl } : {}), size, createdAt: new Date().toISOString() });
+    area.photos.push({ id: captureId, filename, url, ...(publicUrl ? { publicUrl } : {}), size, createdAt: new Date().toISOString() });
     writeWorkspace(workspaceFile, workspace);
   } catch (error) { console.error('Field photo metadata failed:', error); }
 }
@@ -196,7 +196,7 @@ app.post('/api/photos', express.raw({ type: ['image/jpeg', 'image/png', 'image/w
     const stored = savePhotoFile(uploadsDir, storageSession, req.get('content-type'), req.body);
     const saved = { ...stored, publicUrl: publicPhotoUrl(configuredPublicBaseUrl, stored.url) || null };
     session.savedCaptures.set(captureKey, saved);
-    if (authorization.role === 'camera') saveFieldPhotoMetadata(session.project, area, captureId, saved.url, saved.publicUrl, req.body.length);
+    if (authorization.role === 'camera') saveFieldPhotoMetadata(session.project, area, captureId, saved.filename, saved.url, saved.publicUrl, req.body.length);
     res.status(201).json(saved);
   }
   catch (error) { console.error('Photo storage failed:', error); res.status(500).json({ message: 'Salvataggio foto non riuscito.' }); }

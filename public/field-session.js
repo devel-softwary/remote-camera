@@ -28,6 +28,7 @@ export function fieldPhotoItems(workspace, project, areaName, queuedPhotos = [])
   const saved = (area?.photos || []).filter(photo => typeof photo?.url === 'string' && photo.url.startsWith('/uploads/')).map(photo => ({
     id: photo.id || photo.url,
     source: 'server',
+    filename: photo.filename || '',
     url: photo.url,
     publicUrl: photo.publicUrl || '',
     createdAt: photo.createdAt || '',

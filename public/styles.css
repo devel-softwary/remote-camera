@@ -65,6 +65,8 @@ button.active { outline:2px solid #ffcf70; }
 .capture-bar { margin-top:18px; display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
 button.capture { min-height:54px; font-size:1.05rem; }
 .gallery figcaption { color:#b8c0d9; font-size:.8rem; margin-top:5px; }
+.gallery figcaption.gallery-filename, .local-photo-name { overflow-wrap:anywhere; color:#eef2ff; font-family:ui-monospace,monospace; font-size:.78rem; font-weight:700; }
+.gallery-meta { color:#b8c0d9; font-size:.8rem; margin-top:3px; }
 .gallery a { display:inline-block; margin-top:3px; }
 .photo-area { grid-column:1 / -1; }
 .photo-area h3 { margin:18px 0 8px; font-size:.95rem; color:#d9e2ff; }
@@ -94,6 +96,7 @@ body.local-mode .local-capture-overlay:active:not(:disabled) { transform:transla
 .local-photo-thumb { display:block; width:100%; height:auto; min-height:0; padding:0; overflow:hidden; border-color:#36425f; background:#080b14; }
 .local-photo-thumb img { display:block; width:100%; aspect-ratio:1; object-fit:cover; }
 .local-photo-placeholder { display:grid; place-items:center; width:100%; aspect-ratio:1; padding:10px; white-space:pre-line; color:#b8c0d9; line-height:1.5; }
+.local-photo-name { margin-top:6px; }
 .local-photo-meta { display:flex; justify-content:space-between; gap:6px; margin-top:5px; color:#b8c0d9; font-size:.75rem; }
 .local-photo-source { color:#ffcf70; }
 .local-photo-source.server { color:#3ed598; }

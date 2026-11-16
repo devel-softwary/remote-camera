@@ -7,6 +7,7 @@ import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhoto
 import { createAsyncTaskQueue } from './async-task-queue.js';
 import { createFieldPoint, createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
 import { capturePreviewDataUrl } from './capture-preview.js';
+import { photoDisplayName } from './photo-gallery-model.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -575,10 +576,11 @@ async function refreshLocalGallery({ reloadWorkspace = false } = {}) {
         const placeholder = document.createElement('span'); placeholder.className = 'local-photo-placeholder'; placeholder.textContent = '☁️\nFoto sul server'; button.append(placeholder);
       }
       button.addEventListener('click', () => openLocalPhoto(item));
+      const filename = document.createElement('div'); filename.className = 'local-photo-name'; filename.textContent = photoDisplayName(item) || 'Nome in assegnazione…'; filename.title = filename.textContent;
       const meta = document.createElement('div'); meta.className = 'local-photo-meta';
       const source = document.createElement('span'); source.className = `local-photo-source${item.source === 'server' ? ' server' : ''}`; source.textContent = item.source === 'device' ? 'Sul telefono' : 'Sul server';
       const size = document.createElement('span'); size.textContent = formatBytes(item.size || 0);
-      meta.append(source, size); card.append(button, meta); localGallery.append(card);
+      meta.append(source, size); card.append(button, filename, meta); localGallery.append(card);
     }
   } catch (error) {
     if (sequence !== galleryRenderSequence) return;

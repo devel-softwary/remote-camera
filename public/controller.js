@@ -14,7 +14,7 @@ import { GENERIC_WORK_PROFILE, MARADONA_WORK_PROFILE, maradonaPointName, normali
 import { cameraDiagnostics, normalizedVideoPoint } from './camera-capabilities.js';
 import { createAsyncTaskQueue } from './async-task-queue.js';
 import { safePhotoPreviewUrl } from './photo-upload-queue.js';
-import { queuedGalleryPhotos } from './photo-gallery-model.js';
+import { photoDisplayName, queuedGalleryPhotos } from './photo-gallery-model.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -793,10 +793,10 @@ async function uploadPhotoToServer({ blob, meta, selectedArea, context }) {
   try {
     await saveThumbnail(thumbnailKey, await createThumbnail(blob));
   } catch { /* l'originale resta disponibile anche se lo storage del browser è pieno */ }
-  area.photos.push({ id: photoId, captureId: meta.requestId, url: saved.url, ...(saved.publicUrl ? { publicUrl: saved.publicUrl } : {}), thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
+  area.photos.push({ id: photoId, captureId: meta.requestId, filename: saved.filename, url: saved.url, ...(saved.publicUrl ? { publicUrl: saved.publicUrl } : {}), thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
   renderAreas();
-  if (session?.room === context.room) sendSignal({ type: 'photo-saved', area: area.name, photo: { url: saved.url, ...(saved.publicUrl ? { publicUrl: saved.publicUrl } : {}), createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
+  if (session?.room === context.room) sendSignal({ type: 'photo-saved', area: area.name, photo: { filename: saved.filename, url: saved.url, ...(saved.publicUrl ? { publicUrl: saved.publicUrl } : {}), createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
   return { areaName: area.name, size: blob.size };
 }
 
@@ -832,11 +832,12 @@ function renderGallery() {
         img.dataset.lazyState = 'loaded';
         imageFrame.setAttribute('aria-busy', 'false');
       } else if (!photo.pending) photoLazyLoader.observe(img, photo);
-      const meta = document.createElement('figcaption'); meta.textContent = photo.pending ? 'Invio in corso…' : `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
+      const filename = document.createElement('figcaption'); filename.className = 'gallery-filename'; filename.textContent = photoDisplayName(photo) || 'Nome in assegnazione…'; filename.title = filename.textContent;
+      const meta = document.createElement('div'); meta.className = 'gallery-meta'; meta.textContent = photo.pending ? 'Invio in corso…' : `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const actions = document.createElement('div'); actions.className = 'gallery-actions';
       if (photo.pending) {
         const pending = document.createElement('span'); pending.className = 'gallery-pending'; pending.textContent = 'In attesa';
-        actions.append(pending); figure.append(imageFrame, meta, actions); items.append(figure);
+        actions.append(pending); figure.append(imageFrame, filename, meta, actions); items.append(figure);
         continue;
       }
       const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary gallery-icon-button'; view.title = `Visualizza foto ${area.name}`; view.setAttribute('aria-label', view.title);
@@ -851,7 +852,7 @@ function renderGallery() {
       const removeIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); removeIcon.setAttribute('viewBox', '0 0 24 24'); removeIcon.setAttribute('aria-hidden', 'true'); removeIcon.setAttribute('focusable', 'false');
       for (const data of ['M3 6h18', 'M8 6V4h8v2', 'M6 6l1 14h10l1-14', 'M10 10v6', 'M14 10v6']) { const path = document.createElementNS(removeIcon.namespaceURI, 'path'); path.setAttribute('d', data); removeIcon.append(path); }
       remove.append(removeIcon); remove.addEventListener('click', () => void deleteGalleryPhoto(photo, area, remove));
-      actions.append(view, link, remove); figure.append(imageFrame, meta, actions); items.append(figure);
+      actions.append(view, link, remove); figure.append(imageFrame, filename, meta, actions); items.append(figure);
     }
     group.append(title, items); gallery.append(group);
   }

@@ -14,3 +14,15 @@ export function queuedGalleryPhotos(captures, project, areaId) {
     }))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
+
+export function photoDisplayName(photo) {
+  const explicit = String(photo?.filename || '');
+  if (/^[^\\/:*?"<>|\x00-\x1f]{1,160}$/.test(explicit)) return explicit;
+  try {
+    const pathname = new URL(String(photo?.url || ''), 'https://local.invalid').pathname;
+    const filename = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
+    return /^[^\\/:*?"<>|\x00-\x1f]{1,160}$/.test(filename) ? filename : '';
+  } catch {
+    return '';
+  }
+}
