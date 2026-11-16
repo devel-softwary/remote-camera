@@ -12,6 +12,7 @@ import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './
 import { freezeVideoPreview } from './capture-preview.js';
 import { GENERIC_WORK_PROFILE, MARADONA_WORK_PROFILE, maradonaPointName, normalizeMaradonaLocation, normalizeWorkProfile } from './work-profile.js';
 import { cameraDiagnostics, normalizedVideoPoint } from './camera-capabilities.js';
+import { createAsyncTaskQueue } from './async-task-queue.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -96,7 +97,6 @@ let captureSeq = 0;
 let pendingPhoto = null;
 let captureRequestId = null;
 let captureTimeout = null;
-let photoUploadAbortController = null;
 let torchOn = false;
 let cameraInfo = null;
 let projects = [];
@@ -118,6 +118,14 @@ let suppressNextCadClick = false;
 let sessionStarting = false;
 let currentPhotoZoomRange = { min: 1, max: 1 };
 const photoLazyLoader = createPhotoLazyLoader({ loadThumbnail });
+const uploadingAreaCounts = new Map();
+const uploadingProjectCounts = new Map();
+let uploadQueueState = { pending: 0, running: 0, total: 0 };
+let lastUploadMessage = '';
+const photoServerQueue = createAsyncTaskQueue(uploadPhotoToServer, { onChange: state => {
+  uploadQueueState = state;
+  renderUploadState();
+} });
 
 function renderHelp() {
   for (const step of HELP_STEPS) {
@@ -207,6 +215,7 @@ function createPointActionButton(label, className, pathData) {
 }
 
 function renameListedPhotoPoint(point, areas) {
+  if (uploadingAreaCounts.has(point.areaId)) { window.alert('Attendi il completamento dell’invio prima di rinominare il punto.'); return; }
   const requestedName = window.prompt('Nuovo nome del punto foto:', point.label);
   if (requestedName === null) return;
   if (!renamePhotoPoint(projectPoints(), areas, point.id, requestedName)) { window.alert('Inserisci un nome univoco per il punto foto.'); return; }
@@ -215,7 +224,7 @@ function renameListedPhotoPoint(point, areas) {
 
 async function deleteListedPhotoPoint(point, areas) {
   const area = areas.find(item => item.id === point.areaId);
-  if (captureRequestId && area?.id === areaSelect.value) { window.alert('Attendi il completamento dello scatto prima di eliminare il punto.'); return; }
+  if ((captureRequestId && area?.id === areaSelect.value) || uploadingAreaCounts.has(area?.id)) { window.alert('Attendi il completamento dello scatto o dell’invio prima di eliminare il punto.'); return; }
   const photoCount = area?.photos?.length || 0;
   const detail = photoCount ? ` Contiene ${photoCount} foto: saranno rimosse dall’elenco, ma i file resteranno sul disco.` : '';
   if (!window.confirm(`Eliminare il punto foto “${point.label}”?${detail}`)) return;
@@ -284,15 +293,13 @@ function clearCaptureRequest() {
   if (captureTimeout) clearTimeout(captureTimeout);
   captureTimeout = null;
   captureRequestId = null;
-  photoUploadAbortController = null;
   updateCaptureButton();
 }
 
 function expireCaptureRequest() {
   if (!captureRequestId) return;
   pendingPhoto = null;
-  photoUploadAbortController?.abort();
-  captureState.textContent = 'Tempo scaduto durante il salvataggio. Riprova lo scatto.';
+  captureState.textContent = 'Tempo scaduto durante la ricezione. Riprova lo scatto.';
   clearCaptureRequest();
 }
 
@@ -703,33 +710,48 @@ function finishPhoto() {
   const p = pendingPhoto;
   pendingPhoto = null;
   const blob = new Blob(p.chunks, { type: p.meta.mime || 'image/jpeg' });
-  savePhoto(blob, p.meta, p.area).catch(err => {
-    if (!isCurrentCapture(captureRequestId, p.meta.requestId)) return;
-    captureState.textContent = `Errore archivio: ${err.message}`;
-    clearCaptureRequest();
-  });
+  const context = { room: session.room, controllerToken: session.controllerToken, project: session.project };
+  clearCaptureRequest();
+  uploadingAreaCounts.set(p.area.id, (uploadingAreaCounts.get(p.area.id) || 0) + 1);
+  uploadingProjectCounts.set(context.project, (uploadingProjectCounts.get(context.project) || 0) + 1);
+  photoServerQueue.enqueue({ blob, meta: p.meta, selectedArea: p.area, context })
+    .then(result => { lastUploadMessage = `Foto archiviata in “${result.areaName}”: ${formatBytes(result.size)}.`; })
+    .catch(error => { lastUploadMessage = `Errore invio foto: ${error.message}`; })
+    .finally(() => {
+      const remaining = (uploadingAreaCounts.get(p.area.id) || 1) - 1;
+      if (remaining) uploadingAreaCounts.set(p.area.id, remaining);
+      else uploadingAreaCounts.delete(p.area.id);
+      const projectRemaining = (uploadingProjectCounts.get(context.project) || 1) - 1;
+      if (projectRemaining) uploadingProjectCounts.set(context.project, projectRemaining);
+      else uploadingProjectCounts.delete(context.project);
+      renderUploadState();
+    });
 }
 
-async function savePhoto(blob, meta, selectedArea) {
-  if (!selectedArea || selectedArea.status !== 'open') throw new Error('Il punto foto non è più aperto.');
-  photoUploadAbortController = new AbortController();
-  const response = await fetch('/api/photos', { method: 'POST', signal: photoUploadAbortController.signal, headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': session.room, 'x-controller-token': session.controllerToken, 'x-project': session.project, 'x-area': selectedArea.name, 'x-capture-id': meta.requestId }, body: blob });
+function renderUploadState() {
+  if (captureRequestId) return;
+  captureState.textContent = uploadQueueState.total
+    ? `${uploadQueueState.total} foto in invio al server. Puoi scattare ancora.`
+    : lastUploadMessage;
+}
+
+async function uploadPhotoToServer({ blob, meta, selectedArea, context }) {
+  if (!selectedArea || !context?.room || !context.controllerToken) throw new Error('Destinazione foto non valida.');
+  const response = await fetch('/api/photos', { method: 'POST', headers: { 'content-type': blob.type || 'image/jpeg', 'x-room': context.room, 'x-controller-token': context.controllerToken, 'x-project': context.project, 'x-area': selectedArea.name, 'x-capture-id': meta.requestId }, body: blob });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Salvataggio non riuscito');
   const saved = await response.json();
-  if (!isCurrentCapture(captureRequestId, meta.requestId)) return;
-  const area = (areasByProject[session.project] || []).find(item => item.id === selectedArea.id);
+  const area = (areasByProject[context.project] || []).find(item => item.id === selectedArea.id);
   if (!area) throw new Error('Punto foto non disponibile');
   const photoId = crypto.randomUUID();
-  const thumbnailKey = thumbnailStorageKey(session.project, area.id, photoId);
+  const thumbnailKey = thumbnailStorageKey(context.project, area.id, photoId);
   try {
     await saveThumbnail(thumbnailKey, await createThumbnail(blob));
   } catch { /* l'originale resta disponibile anche se lo storage del browser è pieno */ }
   area.photos.push({ id: photoId, url: saved.url, thumbnailKey, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size });
   saveWorkspace();
   renderAreas();
-  sendSignal({ type: 'photo-saved', photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
-  captureState.textContent = `Foto archiviata in “${area.name}”: ${formatBytes(blob.size)}.`;
-  clearCaptureRequest();
+  if (session?.room === context.room) sendSignal({ type: 'photo-saved', photo: { url: saved.url, createdAt: meta.createdAt, width: meta.width, height: meta.height, size: blob.size } });
+  return { areaName: area.name, size: blob.size };
 }
 
 function publishActiveArea() {
@@ -966,6 +988,7 @@ projectProfile.addEventListener('change', () => {
 
 renameProjectBtn.addEventListener('click', async () => {
   const current = projectSelect.value;
+  if (uploadingProjectCounts.has(current)) { window.alert('Attendi il completamento degli invii prima di rinominare il progetto.'); return; }
   const name = nextProjectName(projects.filter(project => project !== current), window.prompt('Nuovo nome progetto:', current) || '');
   if (!name) return;
   try {
@@ -988,6 +1011,7 @@ renameProjectBtn.addEventListener('click', async () => {
 
 deleteProjectBtn.addEventListener('click', async () => {
   const current = projectSelect.value;
+  if (uploadingProjectCounts.has(current)) { window.alert('Attendi il completamento degli invii prima di eliminare il progetto.'); return; }
   if (!current || !window.confirm(`Eliminare il progetto “${current}”?`)) return;
   try { await deleteLayerFile(current); } catch (error) { window.alert(`Impossibile eliminare il layer: ${error.message}`); return; }
   projects = projects.filter(project => project !== current);
