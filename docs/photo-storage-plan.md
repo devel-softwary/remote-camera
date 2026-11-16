@@ -14,4 +14,4 @@
 - Sotto ogni miniatura viene mostrato il nome del file; durante l'upload compare uno stato temporaneo fino all'assegnazione server.
 - In modalità **Usa questo telefono**, gli originali entrano prima in una coda IndexedDB. La coda è ripresa dalle nuove sessioni dello stesso progetto e rimossa solo dopo la conferma server.
 - Selezionando un progetto, il controller può scaricarlo in ZIP. Se necessario viene creata una sessione tecnica per autorizzare il download. L'archivio conserva la struttura generica o la radice `DAM/` e non espone il percorso dello storage.
-- Accanto al nome di ogni nodo Maradona, sopra le foto, è disponibile il download Excel con commessa, traliccio, ID nodo e link pubblico di ogni foto. La commessa usa `MARADONA_JOB_CODE`, con fallback temporaneo `XXXX`.
+- Per ogni nodo Maradona il download Excel è disponibile sia nella lista laterale sia accanto al nome sopra le foto. Contiene commessa, traliccio, ID nodo e link pubblico di ogni foto. La commessa usa `MARADONA_JOB_CODE`, con fallback temporaneo `XXXX`.

@@ -266,6 +266,7 @@ function renderAreas() {
   const projectSelected = isProjectSelected(project);
   const areas = projectSelected ? (areasByProject[project] ||= []) : [];
   const points = photoPointsByProject[project] || [];
+  const isMaradona = normalizeWorkProfile(projectProfilesByProject[project]).type === MARADONA_WORK_PROFILE;
   if (linkPhotoPointsToAreas(points, areas)) saveWorkspace();
   const pointAreas = points.map(point => areas.find(area => area.id === point.areaId)).filter(Boolean);
   const selected = areaSelect.value;
@@ -286,6 +287,10 @@ function renderAreas() {
       button.append(name, status);
       button.addEventListener('click', () => { areaSelect.value = area.id; selectedPhotoPointId = point.id; renderAreas(); publishActiveArea(); });
       const actions = document.createElement('div'); actions.className = 'photo-point-list-actions';
+      if (isMaradona && area?.location) {
+        const excel = createPointActionButton(`Scarica Excel ${point.label}`, 'point-action-excel', []); excel.textContent = 'XLSX';
+        excel.addEventListener('click', () => void downloadNodeExcel(area, excel)); actions.append(excel);
+      }
       const edit = createPointActionButton(`Rinomina ${point.label}`, 'point-action-edit', ['M4 20h4L19 9l-4-4L4 16v4', 'M13.5 6.5l4 4']); edit.addEventListener('click', () => renameListedPhotoPoint(point, areas));
       const remove = createPointActionButton(`Elimina ${point.label}`, 'point-action-delete', ['M3 6h18', 'M8 6V4h8v2', 'M6 6l1 14h10l1-14', 'M10 10v6', 'M14 10v6']); remove.addEventListener('click', () => void deleteListedPhotoPoint(point, areas));
       actions.append(edit, remove); item.append(button, actions); photoPointList.append(item);

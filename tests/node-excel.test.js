@@ -30,7 +30,9 @@ assert.deepEqual([...workbook.subarray(0, 2)], [0x50, 0x4b]);
 assert.ok(workbook.length > 1000);
 
 const controllerSource = await readFile(new URL('../public/controller.js', import.meta.url), 'utf8');
+const pointListSource = controllerSource.slice(controllerSource.indexOf('function renderAreas()'), controllerSource.indexOf('function canCapture()'));
 const gallerySource = controllerSource.slice(controllerSource.indexOf('function renderGallery()'), controllerSource.indexOf('async function deleteGalleryPhoto'));
+assert.match(pointListSource, /point-action-excel/);
 assert.match(gallerySource, /photo-area-heading/);
 assert.match(gallerySource, /Scarica XLSX/);
 assert.match(gallerySource, /isMaradona && area\.location/);
