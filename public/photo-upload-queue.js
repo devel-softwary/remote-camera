@@ -1,5 +1,11 @@
 const DB_NAME = 'remote-camera-photo-queue';
 const STORE_NAME = 'photos';
+const MAX_PREVIEW_URL_LENGTH = 256 * 1024;
+
+export function safePhotoPreviewUrl(value) {
+  const preview = String(value || '');
+  return preview.length <= MAX_PREVIEW_URL_LENGTH && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(preview) ? preview : '';
+}
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -32,10 +38,12 @@ export function createQueuedPhoto(input) {
   if (!input?.id || !input.room || !input.project || !input.area || !(input.blob instanceof Blob)) {
     throw new Error('Dati foto locale non validi.');
   }
+  const previewUrl = safePhotoPreviewUrl(input.previewUrl);
   return {
     id: String(input.id), room: String(input.room), project: String(input.project), area: String(input.area),
     blob: input.blob, createdAt: String(input.createdAt || new Date().toISOString()),
-    width: Number(input.width) || 0, height: Number(input.height) || 0, size: input.blob.size
+    width: Number(input.width) || 0, height: Number(input.height) || 0, size: input.blob.size,
+    ...(previewUrl ? { previewUrl } : {})
   };
 }
 
@@ -55,6 +63,7 @@ export function remotePhotoQueueMessage(record) {
   if (!record?.id || !record.project || !record.area || !(record.blob instanceof Blob)) throw new Error('Foto remota non valida.');
   return {
     type: 'photo-queued', requestId: record.id, project: record.project, area: record.area,
-    createdAt: record.createdAt, width: record.width, height: record.height, size: record.size
+    createdAt: record.createdAt, width: record.width, height: record.height, size: record.size,
+    ...(safePhotoPreviewUrl(record.previewUrl) ? { previewUrl: record.previewUrl } : {})
   };
 }

@@ -10,5 +10,6 @@
 - Gli URL foto sono leggibili senza sessione per consentire l'apertura da Excel. Non contengono percorsi locali; la directory blocca dotfile e content sniffing.
 - Nomi di progetto e area sono validati prima di costruire il percorso.
 - Le miniature JPEG sono salvate in IndexedDB nel browser del controller e usate nell'elenco foto; gli originali restano nello storage del server.
+- Durante ricezione e upload, l'elenco mostra come placeholder la mini-anteprima JPEG acquisita al momento dello scatto.
 - In modalità **Usa questo telefono**, gli originali entrano prima in una coda IndexedDB. La coda è ripresa dalle nuove sessioni dello stesso progetto e rimossa solo dopo la conferma server.
 - Selezionando un progetto, il controller può scaricarlo in ZIP. Se necessario viene creata una sessione tecnica per autorizzare il download. L'archivio conserva la struttura generica o la radice `DAM/` e non espone il percorso dello storage.

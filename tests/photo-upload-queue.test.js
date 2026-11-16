@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createQueuedPhoto, queuedPhotoSummary, remotePhotoQueueMessage } from '../public/photo-upload-queue.js';
+import { createQueuedPhoto, queuedPhotoSummary, remotePhotoQueueMessage, safePhotoPreviewUrl } from '../public/photo-upload-queue.js';
 
 const blob = new Blob(['photo'], { type: 'image/jpeg' });
 const record = createQueuedPhoto({ id: 'capture-1', room: 'ROOM01', project: 'DAM', area: 'TR01_A_N001', blob, width: 10, height: 20 });
@@ -13,6 +13,11 @@ assert.deepEqual(remotePhotoQueueMessage(record), {
 });
 assert.throws(() => createQueuedPhoto({ id: 'bad' }), /non validi/);
 assert.throws(() => remotePhotoQueueMessage({ id: 'bad' }), /non valida/);
+const previewUrl = 'data:image/jpeg;base64,AA==';
+const previewRecord = createQueuedPhoto({ id: 'capture-2', room: 'ROOM01', project: 'DAM', area: 'TR01_A_N001', blob, previewUrl });
+assert.equal(previewRecord.previewUrl, previewUrl);
+assert.equal(remotePhotoQueueMessage(previewRecord).previewUrl, previewUrl);
+assert.equal(safePhotoPreviewUrl('data:text/html;base64,AA=='), '');
 
 const cameraSource = await readFile(new URL('../public/camera.js', import.meta.url), 'utf8');
 const captureFlow = cameraSource.slice(cameraSource.indexOf('async function captureLocalPhoto'), cameraSource.indexOf('function renderLocalSession'));

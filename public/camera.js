@@ -6,6 +6,7 @@ import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto, remotePhotoQueueMessage } from './photo-upload-queue.js';
 import { createAsyncTaskQueue } from './async-task-queue.js';
 import { createFieldPoint, createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
+import { capturePreviewDataUrl } from './capture-preview.js';
 
 const video = document.querySelector('#localVideo');
 const statusEl = document.querySelector('#status');
@@ -437,7 +438,7 @@ async function sendPhoto(requestId, captureContext = {}) {
     const { blob } = await capturePhoto(frame, currentTrack, flashMode ? { fillLightMode: flashMode } : {}, window.ImageCapture);
     const record = createQueuedPhoto({
       id: requestId, room, project: captureProject, area: captureArea,
-      blob, createdAt: frame.createdAt, width: frame.width, height: frame.height
+      blob, previewUrl: capturePreviewDataUrl(frame.canvas), createdAt: frame.createdAt, width: frame.width, height: frame.height
     });
     await queuePhoto(record);
     sendData(remotePhotoQueueMessage(record));

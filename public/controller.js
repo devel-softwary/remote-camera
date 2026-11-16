@@ -9,10 +9,12 @@ import { createPhotoLazyLoader } from './photo-lazy-loader.js';
 import { clampPhotoZoom, photoZoomRange } from './photo-viewer.js';
 import { CAPTURE_TIMEOUT_MS, canStartCapture, isCompletePhoto, isCurrentCapture } from './capture-lifecycle.js';
 import { deleteLayerFile, loadLayerFile, moveLayerFile, saveLayerFile } from './layer-storage.js';
-import { freezeVideoPreview } from './capture-preview.js';
+import { capturePreviewDataUrl, freezeVideoPreview } from './capture-preview.js';
 import { GENERIC_WORK_PROFILE, MARADONA_WORK_PROFILE, maradonaPointName, normalizeMaradonaLocation, normalizeWorkProfile } from './work-profile.js';
 import { cameraDiagnostics, normalizedVideoPoint } from './camera-capabilities.js';
 import { createAsyncTaskQueue } from './async-task-queue.js';
+import { safePhotoPreviewUrl } from './photo-upload-queue.js';
+import { queuedGalleryPhotos } from './photo-gallery-model.js';
 
 const roomCode = document.querySelector('#roomCode');
 const cameraUrlEl = document.querySelector('#cameraUrl');
@@ -299,6 +301,7 @@ function clearCaptureRequest() {
 function expireCaptureRequest() {
   if (!captureRequestId) return;
   queuedCaptures.delete(captureRequestId);
+  renderGallery();
   pendingPhoto = null;
   captureState.textContent = 'Tempo scaduto durante la ricezione. Riprova lo scatto.';
   clearCaptureRequest();
@@ -324,8 +327,15 @@ function registerQueuedCapture(message) {
     entry = { area, context: { room: session.room, controllerToken: session.controllerToken, project: session.project } };
     queuedCaptures.set(requestId, entry);
   }
+  const previewUrl = safePhotoPreviewUrl(message.previewUrl);
+  if (previewUrl) entry.previewUrl = previewUrl;
+  entry.createdAt = String(message.createdAt || entry.createdAt || '');
+  entry.width = Number(message.width) || entry.width || 0;
+  entry.height = Number(message.height) || entry.height || 0;
+  entry.size = Number(message.size) || entry.size || 0;
   if (captureRequestId === requestId) clearCaptureRequest();
   captureState.textContent = `${queuedCaptures.size} foto in coda dal telefono. Puoi scattare ancora.`;
+  renderGallery();
   return entry;
 }
 
@@ -713,6 +723,7 @@ function handleDataChannel(e) {
       if (!isCurrentCapture(captureRequestId, msg.requestId)) return;
       captureState.textContent = `Errore: ${msg.message}`;
       queuedCaptures.delete(msg.requestId);
+      renderGallery();
       pendingPhoto = null;
       clearCaptureRequest();
     }
@@ -743,6 +754,7 @@ function finishPhoto() {
     .then(result => {
       lastUploadMessage = `Foto archiviata in “${result.areaName}”: ${formatBytes(result.size)}.`;
       queuedCaptures.delete(p.meta.requestId);
+      renderGallery();
       sendData({ type: 'photo-saved-ack', requestId: p.meta.requestId });
     })
     .catch(error => {
@@ -801,22 +813,32 @@ function renderGallery() {
   const areas = (areasByProject[projectSelect.value] || []).filter(area => pointAreaIds.has(area.id));
   photoLazyLoader.clear();
   gallery.replaceChildren();
-  if (!areas.some(area => area.photos?.length)) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
+  if (!areas.some(area => area.photos?.length || queuedGalleryPhotos(queuedCaptures, projectSelect.value, area.id).length)) { gallery.innerHTML = '<p class="small">Nessuna foto associata ai punti foto.</p>'; return; }
   for (const area of areas) {
-    if (!area.photos?.length) continue;
+    const photos = [...queuedGalleryPhotos(queuedCaptures, projectSelect.value, area.id), ...(area.photos || [])];
+    if (!photos.length) continue;
     const group = document.createElement('section'); group.className = 'photo-area';
     const title = document.createElement('h3'); title.textContent = `${area.name}${area.status === 'closed' ? ' · chiuso' : ''}`;
     const items = document.createElement('div'); items.className = 'gallery';
-    for (const photo of area.photos) {
+    for (const photo of photos) {
       const figure = document.createElement('figure');
       const imageFrame = document.createElement('div'); imageFrame.className = 'gallery-image-frame'; imageFrame.setAttribute('aria-busy', 'true');
       const img = document.createElement('img'); img.alt = `Foto ${area.name}`;
       const loader = document.createElement('span'); loader.className = 'gallery-image-loader'; loader.setAttribute('role', 'status');
       const loaderText = document.createElement('span'); loaderText.className = 'sr-only'; loaderText.textContent = 'Caricamento foto'; loader.append(loaderText);
       imageFrame.append(img, loader);
-      photoLazyLoader.observe(img, photo);
-      const meta = document.createElement('figcaption'); meta.textContent = `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
+      if (photo.pending && photo.previewUrl) {
+        img.src = photo.previewUrl;
+        img.dataset.lazyState = 'loaded';
+        imageFrame.setAttribute('aria-busy', 'false');
+      } else if (!photo.pending) photoLazyLoader.observe(img, photo);
+      const meta = document.createElement('figcaption'); meta.textContent = photo.pending ? 'Invio in corso…' : `${photo.width || '?'}×${photo.height || '?'} • ${formatBytes(photo.size)}`;
       const actions = document.createElement('div'); actions.className = 'gallery-actions';
+      if (photo.pending) {
+        const pending = document.createElement('span'); pending.className = 'gallery-pending'; pending.textContent = 'In attesa';
+        actions.append(pending); figure.append(imageFrame, meta, actions); items.append(figure);
+        continue;
+      }
       const view = document.createElement('button'); view.type = 'button'; view.className = 'secondary gallery-icon-button'; view.title = `Visualizza foto ${area.name}`; view.setAttribute('aria-label', view.title);
       const viewIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); viewIcon.setAttribute('viewBox', '0 0 24 24'); viewIcon.setAttribute('aria-hidden', 'true'); viewIcon.setAttribute('focusable', 'false');
       const viewOutline = document.createElementNS(viewIcon.namespaceURI, 'path'); viewOutline.setAttribute('d', 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12');
@@ -889,10 +911,17 @@ function openPhotoViewer(photo, areaName) {
 
 captureBtn.addEventListener('click', () => {
   if (!canStartCapture(canCapture(), captureRequestId)) return;
-  if (freezeVideoPreview(video, capturePreviewCanvas)) capturePreview.hidden = false;
+  const previewAvailable = freezeVideoPreview(video, capturePreviewCanvas);
+  if (previewAvailable) capturePreview.hidden = false;
   const requestId = crypto.randomUUID();
   const area = currentArea();
-  queuedCaptures.set(requestId, { area, context: { room: session.room, controllerToken: session.controllerToken, project: session.project } });
+  queuedCaptures.set(requestId, {
+    area,
+    context: { room: session.room, controllerToken: session.controllerToken, project: session.project },
+    previewUrl: previewAvailable ? capturePreviewDataUrl(capturePreviewCanvas) : '',
+    createdAt: new Date().toISOString()
+  });
+  renderGallery();
   startCaptureRequest(requestId);
   captureState.textContent = 'Scatto full-resolution in corso…';
   sendData({ type: 'capture', requestId, project: session.project, area: area.name });

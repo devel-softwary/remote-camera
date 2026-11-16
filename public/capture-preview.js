@@ -14,3 +14,22 @@ export function freezeVideoPreview(video, canvas) {
   context.drawImage(video, 0, 0, size.width, size.height);
   return true;
 }
+
+export function capturePreviewDataUrl(sourceCanvas, createCanvas = () => document.createElement('canvas')) {
+  const size = previewSize(sourceCanvas?.width, sourceCanvas?.height, 320);
+  if (!size) return '';
+  try {
+    let canvas = sourceCanvas;
+    if (size.width !== sourceCanvas.width || size.height !== sourceCanvas.height) {
+      canvas = createCanvas();
+      canvas.width = size.width;
+      canvas.height = size.height;
+      const context = canvas.getContext('2d');
+      if (!context) return '';
+      context.drawImage(sourceCanvas, 0, 0, size.width, size.height);
+    }
+    return canvas.toDataURL('image/jpeg', 0.75);
+  } catch {
+    return '';
+  }
+}
