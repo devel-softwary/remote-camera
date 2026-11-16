@@ -4,6 +4,7 @@ import { capturePhoto, captureVideoFrame } from './photo-capture.js';
 import { cameraDiagnostics, normalizeCameraControls, normalizedVideoPoint } from './camera-capabilities.js';
 import { canRetryConnection, reconnectDelay } from './reconnect-policy.js';
 import { createQueuedPhoto, deleteQueuedPhoto, listQueuedPhotos, listQueuedPhotosForProject, queuedPhotoSummary, queuePhoto } from './photo-upload-queue.js';
+import { createAsyncTaskQueue } from './async-task-queue.js';
 import { createFieldPoint, createFieldProject, fieldAreas, fieldPhotoItems, fieldProjects, fieldSessionRequest } from './field-session.js';
 
 const video = document.querySelector('#localVideo');
@@ -101,6 +102,12 @@ let localSessionBinding;
 let galleryRenderSequence = 0;
 let galleryObjectUrls = [];
 let viewerObjectUrl = '';
+let localUploadQueueState = { pending: 0, running: 0, total: 0 };
+const localUploadPromises = new Map();
+const localUploadQueue = createAsyncTaskQueue(({ record, context }) => uploadLocalPhoto(record, context), { onChange: state => {
+  localUploadQueueState = state;
+  renderLocalUploadState();
+} });
 
 function savedCamera() {
   try { return localStorage.getItem(preferredCameraKey) || ''; } catch { return ''; }
@@ -438,11 +445,19 @@ async function refreshLocalQueue() {
     localQueueInfo.textContent = summary.count
       ? `${summary.count} foto in attesa • ${formatBytes(summary.bytes)}`
       : 'Nessuna foto in attesa.';
-    syncLocalPhotosBtn.disabled = localSyncBusy || !summary.count;
+    syncLocalPhotosBtn.disabled = localSyncBusy || Boolean(localUploadQueueState.total) || !summary.count;
   } catch {
     localQueueInfo.textContent = 'Archivio locale non disponibile.';
     syncLocalPhotosBtn.disabled = true;
   }
+}
+
+function renderLocalUploadState() {
+  if (!localMode) return;
+  if (localUploadQueueState.total) {
+    localQueueInfo.textContent = `${localUploadQueueState.total} foto in invio • puoi continuare a scattare`;
+    syncLocalPhotosBtn.disabled = true;
+  } else void refreshLocalQueue();
 }
 
 async function fetchFieldWorkspace() {
@@ -505,18 +520,26 @@ async function refreshLocalGallery({ reloadWorkspace = false } = {}) {
   }
 }
 
-async function uploadLocalPhoto(record) {
+async function uploadLocalPhoto(record, context = { room, authToken }) {
   const response = await fetch('/api/photos', {
     method: 'POST',
     headers: {
-      'content-type': record.blob.type || 'image/jpeg', 'x-room': room, 'x-camera-token': authToken,
-      'x-project': localProject, 'x-area': record.area, 'x-capture-id': record.id
+      'content-type': record.blob.type || 'image/jpeg', 'x-room': context.room, 'x-camera-token': context.authToken,
+      'x-project': record.project, 'x-area': record.area, 'x-capture-id': record.id
     },
     body: record.blob
   });
   if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Upload non riuscito.');
   await deleteQueuedPhoto(record.id);
   return response.json();
+}
+
+function enqueueLocalUpload(record) {
+  if (localUploadPromises.has(record.id)) return localUploadPromises.get(record.id);
+  const context = { room, authToken };
+  const upload = localUploadQueue.enqueue({ record, context }).finally(() => localUploadPromises.delete(record.id));
+  localUploadPromises.set(record.id, upload);
+  return upload;
 }
 
 async function syncLocalPhotos() {
@@ -532,7 +555,7 @@ async function syncLocalPhotos() {
   try {
     for (const record of records) {
       infoEl.textContent = `Invio ${record.area} • ${formatBytes(record.size)}…`;
-      await uploadLocalPhoto(record);
+      await enqueueLocalUpload(record);
     }
     infoEl.textContent = records.length ? `${records.length} foto sincronizzate.` : 'Nessuna foto da sincronizzare.';
   } catch (error) {
@@ -548,30 +571,38 @@ async function captureLocalPhoto() {
   if (!localMode || photoBusy || cameraBusy || !localProject || !localActiveArea) return;
   photoBusy = true;
   localCaptureBtn.disabled = true;
+  let record = null;
   try {
     const frame = captureVideoFrame(video, currentTrack);
     infoEl.textContent = 'Foto scattata. Salvataggio locale…';
     const { blob } = await capturePhoto(frame, currentTrack, flashMode ? { fillLightMode: flashMode } : {}, window.ImageCapture);
-    const record = createQueuedPhoto({
+    record = createQueuedPhoto({
       id: crypto.randomUUID(), room, project: localProject, area: localActiveArea,
       blob, createdAt: frame.createdAt, width: frame.width, height: frame.height
     });
     await queuePhoto(record);
     infoEl.textContent = `Foto salvata sul telefono • ${formatBytes(blob.size)}`;
-    await refreshLocalQueue();
-    await refreshLocalGallery();
-    if (uploadImmediately.checked) {
-      infoEl.textContent = 'Caricamento foto…';
-      await uploadLocalPhoto(record);
-      infoEl.textContent = `Foto caricata in “${record.area}”.`;
-      await refreshLocalQueue();
-      await refreshLocalGallery({ reloadWorkspace: true });
-    }
   } catch (error) {
+    record = null;
     infoEl.textContent = `Errore scatto: ${error.message}`;
   } finally {
     photoBusy = false;
     localCaptureBtn.disabled = !currentTrack || !localActiveArea;
+  }
+  if (!record) return;
+  void refreshLocalQueue();
+  void refreshLocalGallery();
+  if (uploadImmediately.checked) {
+    infoEl.textContent = 'Foto salvata. Invio in background… puoi scattare ancora.';
+    enqueueLocalUpload(record)
+      .then(() => {
+        if (!photoBusy) infoEl.textContent = `Foto caricata in “${record.area}”.`;
+        return refreshLocalGallery({ reloadWorkspace: true });
+      })
+      .catch(error => {
+        if (!photoBusy) infoEl.textContent = `Foto conservata sul telefono: ${error.message}`;
+      })
+      .finally(() => void refreshLocalQueue());
   }
 }
 

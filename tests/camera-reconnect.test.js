@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { canRetryConnection, reconnectDelay } from '../public/reconnect-policy.js';
+import { createAsyncTaskQueue } from '../public/async-task-queue.js';
 
 const source = readFileSync(new URL('../public/camera.js', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '');
-const init = new Function('document', 'window', 'navigator', 'localStorage', 'loadConfig', 'wsUrl', 'queryParam', 'setStatus', 'formatBytes', 'WebSocket', 'RTCPeerConnection', 'setTimeout', 'clearTimeout', 'canRetryConnection', 'reconnectDelay', 'normalizeCameraControls', source + '\nreturn { start };');
+const init = new Function('document', 'window', 'navigator', 'localStorage', 'loadConfig', 'wsUrl', 'queryParam', 'setStatus', 'formatBytes', 'WebSocket', 'RTCPeerConnection', 'setTimeout', 'clearTimeout', 'canRetryConnection', 'reconnectDelay', 'normalizeCameraControls', 'createAsyncTaskQueue', source + '\nreturn { start };');
 
 const elements = new Map();
 const document = {
@@ -32,7 +33,7 @@ class FakePeer {
 }
 const timers = [];
 const setTimeout = (callback, delay) => { timers.push({ callback, delay }); return timers.length; };
-const api = init(document, { isSecureContext: true }, navigator, { getItem: () => '' }, async () => ({ iceServers: [] }), () => 'wss://test', name => name === 'room' ? 'room' : 'token', () => {}, () => '', FakeWebSocket, FakePeer, setTimeout, () => {}, canRetryConnection, reconnectDelay, () => ({ zoom: null, torch: false, focusModes: [], focusDistance: null, pointsOfInterest: false, flashModes: [] }));
+const api = init(document, { isSecureContext: true }, navigator, { getItem: () => '' }, async () => ({ iceServers: [] }), () => 'wss://test', name => name === 'room' ? 'room' : 'token', () => {}, () => '', FakeWebSocket, FakePeer, setTimeout, () => {}, canRetryConnection, reconnectDelay, () => ({ zoom: null, torch: false, focusModes: [], focusDistance: null, pointsOfInterest: false, flashModes: [] }), createAsyncTaskQueue);
 
 await api.start();
 assert.equal(sockets.length, 1);

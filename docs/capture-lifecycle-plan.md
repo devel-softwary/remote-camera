@@ -8,3 +8,5 @@
 - Lo stato mostra gli upload in corso e permette nuovi scatti.
 - Dopo 75 secondi senza esito, la ricezione viene annullata e lo scatto può essere riprovato.
 - Risposte riferite a uno scatto precedente non alterano lo stato dello scatto corrente.
+- In modalità telefono singolo la foto viene prima salvata in IndexedDB, poi il pulsante di scatto viene riattivato.
+- Gli upload dal telefono sono seriali e proseguono in background; in caso di errore la copia locale resta disponibile per la sincronizzazione manuale.
