@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { deletePhotoFile, photoFilePath, savePhotoFile } from '../photo-storage.js';
+import { deletePhotoFile, listPhotoFiles, photoFilePath, savePhotoFile } from '../photo-storage.js';
 import { maradonaPhotoFilename, photoProjectStorageName, photoStoragePlan, safeCaptureId } from '../storage-policy.js';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'remote-camera-photos-'));
@@ -39,6 +39,9 @@ const legacyFilename = 'DAM_TR01_A_N001_fotogramma07.jpg';
 fs.writeFileSync(path.join(root, 'DAM', 'TR01', 'A', 'N001', legacyFilename), 'legacy');
 assert.equal(photoFilePath(root, session, `/uploads/DAM/TR01/A/N001/${legacyFilename}`), path.join(root, 'DAM', 'TR01', 'A', 'N001', legacyFilename));
 assert.equal(savePhotoFile(root, session, 'image/jpeg', Buffer.from('after legacy')).filename, 'TR01_A_N001_08.jpg');
+assert.deepEqual(listPhotoFiles(root, session).map(photo => [photo.filename, photo.sequence]), [
+  ['TR01_A_N001_02.png', 2], ['TR01_A_N001_03.jpg', 3], [legacyFilename, 7], ['TR01_A_N001_08.jpg', 8]
+]);
 
 const generic = savePhotoFile(root, { project: 'Generico', area: 'Area 1' }, 'image/webp', Buffer.from('generic'));
 assert.equal(generic.filename, '01.webp');

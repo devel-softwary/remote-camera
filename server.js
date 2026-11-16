@@ -10,8 +10,9 @@ import { WebSocketServer, WebSocket } from 'ws';
 import archiver from 'archiver';
 import { authorizePhotoDelete, authorizePhotoUpload, createAllowedSessionAreas, createSessionBinding, createSessionStorageBinding, fieldSessionPayload } from './session-policy.js';
 import { photoProjectStorageName, photoStorageDirectory, safeCaptureId, safeFolderName } from './storage-policy.js';
-import { deletePhotoFile, savePhotoFile } from './photo-storage.js';
+import { deletePhotoFile, listPhotoFiles, savePhotoFile } from './photo-storage.js';
 import { normalizePublicBaseUrl, publicPhotoUrl } from './public-photo-url.js';
+import { createNodeExcel, maradonaNodeArea, nodeExcelFilename } from './node-excel.js';
 import { canDownloadProject, consumeDownloadTicket, issueDownloadTicket, projectArchiveName, projectArchiveRoot } from './project-download.js';
 import { activePeerCount, CAMERA_ROLE, CENTRAL_ROLE, MOBILE_ROLE, normalizedRole, signalTargetRole } from './session-peers.js';
 import { publicStaticOptions } from './static-options.js';
@@ -270,6 +271,30 @@ app.post('/api/projects/:project/download', (req, res) => {
   const authorization = authorizedDownloadProject(req);
   if (!authorization) return res.status(401).json({ message: 'Download progetto non autorizzato.' });
   return streamProjectArchive(res, authorization.storageProject);
+});
+
+app.post('/api/projects/:project/nodes/:area/excel', async (req, res) => {
+  const project = safeFolderName(req.params.project);
+  const areaName = safeFolderName(req.params.area);
+  const room = String(req.get('x-room') || '').toUpperCase();
+  const session = sessions.get(room);
+  if (!project || !areaName || !canDownloadProject(session, project, String(req.get('x-controller-token') || ''), tokensEqual)) {
+    return res.status(401).json({ message: 'Download Excel non autorizzato.' });
+  }
+  const area = maradonaNodeArea(session, areaName);
+  if (!area) return res.status(401).json({ message: 'Nodo Maradona non autorizzato nella sessione corrente.' });
+  if (!configuredPublicBaseUrl) return res.status(503).json({ message: 'Configura PUBLIC_BASE_URL per generare i link pubblici delle foto.' });
+  try {
+    const storageSession = { ...session, area: area.name, location: area.location };
+    const photos = listPhotoFiles(uploadsDir, storageSession).map(photo => ({ ...photo, publicUrl: publicPhotoUrl(configuredPublicBaseUrl, photo.url) }));
+    const workbook = await createNodeExcel({ jobCode: String(process.env.MARADONA_JOB_CODE || 'XXXX').slice(0, 80), location: area.location, photos });
+    res.attachment(nodeExcelFilename(area.location));
+    res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(workbook);
+  } catch (error) {
+    console.error('Node Excel failed:', error);
+    res.status(500).json({ message: 'Creazione Excel del nodo non riuscita.' });
+  }
 });
 
 app.get('/api/qr', async (req, res) => {

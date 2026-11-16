@@ -57,3 +57,13 @@ export function deletePhotoFile(uploadsDir, session, photoUrl) {
     throw error;
   }
 }
+
+export function listPhotoFiles(uploadsDir, session) {
+  const plan = photoStoragePlan(uploadsDir, session, 'image/jpeg');
+  if (!plan || !fs.existsSync(plan.folder)) return [];
+  return fs.readdirSync(plan.folder, { withFileTypes: true }).flatMap(entry => {
+    if (!entry.isFile()) return [];
+    const sequence = photoSequence(entry.name, plan);
+    return sequence ? [{ filename: entry.name, url: photoPublicUrl(plan.segments, entry.name), sequence }] : [];
+  }).sort((a, b) => a.sequence - b.sequence || a.filename.localeCompare(b.filename));
+}

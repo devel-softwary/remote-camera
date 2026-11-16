@@ -19,6 +19,7 @@ MVP per usare uno smartphone come camera remota e un PC/secondo smartphone come 
 - salvataggio automatico su disco locale; con Docker i file restano in `./uploads`
 - coda foto sul telefono con upload manuale o immediato
 - download ZIP dell'intero progetto dal controller, con struttura per area
+- download Excel per ogni nodo Maradona, con dati nodo e link pubblici alle foto
 - STUN incluso; TURN configurabile via variabili d'ambiente
 
 ## Avvio rapido
@@ -62,6 +63,8 @@ PUBLIC_BASE_URL=https://camera.example.com
 ```
 
 `PUBLIC_BASE_URL` è necessario per produrre URL assoluti delle foto da inserire in Excel. Il dominio deve essere raggiungibile dall'esterno e il reverse proxy deve inoltrare anche `/uploads/`.
+
+`MARADONA_JOB_CODE` definisce la commessa negli Excel di dettaglio nodo; finché non viene configurata usa `XXXX`.
 
 ## Docker
 
